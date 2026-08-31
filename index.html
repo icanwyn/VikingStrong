@@ -1081,6 +1081,63 @@ function getEntries(sid, skid) {
   return (entries[sid] && entries[sid][skid]) ? entries[sid][skid] : [];
 }
 function getLast(sid, skid) { var v = getVals(sid, skid); return v.length ? v[v.length-1] : null; }
+function isTimeSkill(sk) {
+  var u = String((sk && sk.unit) != null ? sk.unit : sk || "").toLowerCase();
+  return /(sec|second|\bmin|minute|\btime\b)/.test(u) || u === "s" || u === "m";
+}
+function timeUnitKind(sk) {
+  return /min/.test(String((sk && sk.unit) || "").toLowerCase()) ? "min" : "sec";
+}
+function parseTimeInput(raw, sk) {
+  var s = String(raw == null ? "" : raw).trim();
+  if (!s) return { ok: false, empty: true };
+  if (!isTimeSkill(sk)) {
+    var n = parseFloat(s);
+    return isNaN(n) ? { ok: false, empty: false, error: "Enter a number" } : { ok: true, value: n };
+  }
+  if (s.indexOf(":") >= 0) {
+    var parts = s.split(":");
+    if (parts.length !== 2) return { ok: false, empty: false, error: "Use mm:ss (e.g. 6:42)" };
+    var m = parseFloat(parts[0]), sec = parseFloat(parts[1]);
+    if (isNaN(m) || isNaN(sec) || m < 0 || sec < 0 || sec >= 60) {
+      return { ok: false, empty: false, error: "Use mm:ss — seconds must be 0–59" };
+    }
+    var total = m * 60 + sec;
+    return { ok: true, value: timeUnitKind(sk) === "min" ? total / 60 : total };
+  }
+  var n = parseFloat(s);
+  if (isNaN(n) || n < 0) return { ok: false, empty: false, error: "Under 1 min: seconds. Over 1 min: mm:ss" };
+  return { ok: true, value: timeUnitKind(sk) === "min" ? n / 60 : n };
+}
+function formatTimeValue(value, sk) {
+  if (value == null || isNaN(Number(value))) return "—";
+  if (!isTimeSkill(sk)) {
+    var n = Number(value);
+    return n % 1 === 0 ? String(n) : String(Math.round(n * 10) / 10);
+  }
+  var sec = timeUnitKind(sk) === "min" ? Number(value) * 60 : Number(value);
+  if (sec < 60) {
+    var r = Math.round(sec * 10) / 10;
+    return r % 1 === 0 ? String(Math.round(r)) : r.toFixed(1);
+  }
+  var m = Math.floor(sec / 60);
+  var s = Math.round((sec - m * 60) * 10) / 10;
+  if (s >= 60) { m += 1; s -= 60; }
+  var sTxt = s % 1 === 0 ? String(Math.round(s)) : s.toFixed(1);
+  if (sTxt.indexOf(".") < 0 && sTxt.length < 2) sTxt = "0" + sTxt;
+  if (sTxt.indexOf(".") === 1) sTxt = "0" + sTxt;
+  return m + ":" + sTxt;
+}
+function formatScore(value, sk) {
+  if (value == null || value === "") return "—";
+  if (!isTimeSkill(sk)) return formatTimeValue(value, sk) + (sk && sk.unit ? " " + sk.unit : "");
+  var sec = timeUnitKind(sk) === "min" ? Number(value) * 60 : Number(value);
+  return sec < 60 ? formatTimeValue(value, sk) + " sec" : formatTimeValue(value, sk);
+}
+function scoreFieldAttrs(sk) {
+  if (isTimeSkill(sk)) return 'type="text" inputmode="decimal" placeholder="sec or mm:ss" autocomplete="off"';
+  return 'type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + (sk && sk.unit ? sk.unit : "score") + '…"';
+}
 function getImp(sid, skid) {
   var v = getVals(sid, skid);
   if (v.length < 2) return null;
@@ -1411,7 +1468,7 @@ function renderProgress() {
     var vals = getVals(s.id, skid), imp = getImp(s.id, skid), rank = getRank(s.id, skid);
     return '<tr><td><div class="row">' + avHTML(s.first, s.last, 26) + '<span style="font-weight:500">' + s.first + ' ' + s.last[0] + '.</span></div></td>' +
       '<td>' + spark(vals, sk.lower_better) + '</td>' +
-      '<td style="font-weight:500">' + (vals.length ? vals[vals.length-1] + " " + sk.unit : "—") + '</td>' +
+      '<td style="font-weight:500">' + (vals.length ? formatScore(vals[vals.length-1], sk) : "—") + '</td>' +
       '<td>' + (imp ? '<span style="color:' + (imp.ok ? "var(--gold)" : "var(--red)") + ';font-size:12px">' + (imp.ok ? "▲" : "▼") + " " + imp.pct + '%</span>' : "—") + '</td>' +
       '<td>' + rankBadge(rank) + '</td></tr>';
   }).join(""));
@@ -1434,7 +1491,7 @@ function renderLB() {
       var r = rnks[i];
       return '<div class="pod-col">' + avHTML(s.first, s.last, r===1?50:38) +
         '<div style="font-weight:600;font-size:' + (r===1?15:13) + 'px;margin:6px 0 2px">' + s.first + '</div>' +
-        '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">' + s.val + ' ' + (sk ? sk.unit : "") + '</div>' +
+        '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">' + formatScore(s.val, sk) + '</div>' +
         '<span class="badge ' + meds[i] + '">' + lbls[i] + '</span>' +
         '<div class="pod-bar" style="margin-top:8px;height:' + hts[i] + 'px;background:' + (r===1?"var(--gold-glow)":"var(--surface2)") + '">' +
         '<span style="font-size:' + (r===1?22:16) + 'px;font-weight:600;color:' + (r===1?"var(--gold)":"var(--text2)") + '">#' + r + '</span></div></div>';
@@ -1450,7 +1507,7 @@ function renderLB() {
       '<td>' + rankBadge(i+1) + '</td>' +
       '<td><div class="row">' + avHTML(s.first, s.last, 26) + '<span style="font-weight:' + (i<3?600:400) + '">' + s.first + ' ' + s.last + '</span></div></td>' +
       '<td style="color:var(--text2)">P' + s.period + '</td>' +
-      '<td style="font-weight:500">' + s.val + ' ' + (sk ? sk.unit : "") + '</td>' +
+      '<td style="font-weight:500">' + formatScore(s.val, sk) + '</td>' +
       '<td>' + spark(getVals(s.id, skid), sk && sk.lower_better) + '</td>' +
       '<td>' + (imp ? '<span style="color:' + (imp.ok?"var(--gold)":"var(--red)") + ';font-size:12px">' + (imp.ok?"▲":"▼") + " " + imp.pct + '%</span>' : "—") + '</td>' +
       '<td>' + (s.teacher_id === ME.id
@@ -1575,9 +1632,12 @@ function renderDash() {
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<label style="font-size:13px;font-weight:500">' + sk.name + '</label>' +
       '<div style="text-align:right">' +
-        (last !== null ? '<span style="font-size:11px;color:var(--text3)">Last: </span><span style="font-size:12px;font-weight:500;color:var(--gold)">' + last + ' ' + sk.unit + '</span>' : '<span style="font-size:11px;color:var(--text3)">No entries yet</span>') +
+        (last !== null ? '<span style="font-size:11px;color:var(--text3)">Last: </span><span style="font-size:12px;font-weight:500;color:var(--gold)">' + formatScore(last, sk) + '</span>' : '<span style="font-size:11px;color:var(--text3)">No entries yet</span>') +
       '</div></div>' +
-      '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="ef-' + sk.id + '" style="font-size:18px;text-align:center;padding:12px"/></div>';
+      (isTimeSkill(sk)
+        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42" id="ef-' + sk.id + '" style="font-size:18px;text-align:center;padding:12px"/><div style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px">Under 1 min: seconds &nbsp;·&nbsp; Over 1 min: mm:ss</div>'
+        : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="ef-' + sk.id + '" style="font-size:18px;text-align:center;padding:12px"/>') +
+      '</div>';
   }).join(""));
 }
 
@@ -1602,7 +1662,7 @@ function renderStudentProgress() {
           var isUp   = i > 0 && (sk.lower_better ? v < vals[i-1] : v > vals[i-1]);
           var col = isLast ? "var(--gold)" : isUp ? "rgba(201,168,76,.5)" : "var(--surface3)";
           return '<div style="display:flex;flex-direction:column;align-items:center;flex:1">' +
-            '<div style="font-size:9px;color:var(--text3);margin-bottom:2px">' + v + '</div>' +
+            '<div style="font-size:9px;color:var(--text3);margin-bottom:2px">' + formatTimeValue(v, sk) + '</div>' +
             '<div style="width:100%;height:' + h + 'px;background:' + col + ';border-radius:3px 3px 0 0;transition:height .3s"></div></div>';
         }).join("") +
         (goal ? '<div style="position:absolute;left:0;right:0;height:1.5px;background:rgba(201,168,76,.7);bottom:' + Math.round(((sk.lower_better?mx-goal:goal-mn)/rng)*64) + 'px">' +
@@ -1642,8 +1702,8 @@ function renderStudentProgress() {
         (imp ? '<span style="font-size:12px;color:' + (imp.ok?"var(--gold)":"var(--red)") + '">' + (imp.ok?"▲":"▼") + imp.pct + '%</span>' : "") + '</div></div>' +
       (vals.length ?
         '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px">' +
-          '<div style="font-size:12px"><span style="color:var(--text3)">Latest</span> <strong>' + last + ' ' + sk.unit + '</strong></div>' +
-          '<div style="font-size:12px"><span style="color:var(--text3)">Best</span> <strong style="color:var(--gold)">' + best + ' ' + sk.unit + '</strong></div>' +
+          '<div style="font-size:12px"><span style="color:var(--text3)">Latest</span> <strong>' + formatScore(last, sk) + '</strong></div>' +
+          '<div style="font-size:12px"><span style="color:var(--text3)">Best</span> <strong style="color:var(--gold)">' + formatScore(best, sk) + '</strong></div>' +
           '<div style="font-size:12px"><span style="color:var(--text3)">Entries</span> <strong>' + vals.length + '</strong></div>' +
         '</div>' + bars + goalBar +
         (imp ? '<div style="margin-top:10px;font-size:12px;color:var(--text2);background:var(--surface2);padding:7px 10px;border-radius:6px">' +
@@ -1670,7 +1730,10 @@ function renderStudentGoals() {
           (last!==null ? 'Current: <strong style="color:var(--text)">' + last + '</strong><br>' : '') +
           (best!==null ? 'Best: <strong style="color:var(--gold)">' + best + '</strong>' : '') +
         '</div></div>' +
-      '<input type="number" step="0.1" inputmode="decimal" id="sg-' + sk.id + '" placeholder="Set your ' + sk.name + ' goal…" value="' + (goals[sk.id]||"") + '" style="font-size:16px;text-align:center;padding:10px"/></div>';
+      (isTimeSkill(sk)
+        ? '<input type="text" inputmode="decimal" autocomplete="off" id="sg-' + sk.id + '" placeholder="sec or mm:ss" value="' + (goals[sk.id] ? formatTimeValue(goals[sk.id], sk) : "") + '" style="font-size:16px;text-align:center;padding:10px"/>'
+        : '<input type="number" step="0.1" inputmode="decimal" id="sg-' + sk.id + '" placeholder="Set your ' + sk.name + ' goal…" value="' + (goals[sk.id]||"") + '" style="font-size:16px;text-align:center;padding:10px"/>') +
+      '</div>';
   }).join(""));
 
   // Goal progress summary
@@ -1682,7 +1745,7 @@ function renderStudentGoals() {
     var achieved = last !== null && (sk.lower_better ? last <= goal : last >= goal);
     return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">' +
       '<div style="flex:1"><div style="font-size:13px;font-weight:500">' + sk.name + '</div>' +
-      '<div style="font-size:12px;color:var(--text2)">' + (last!==null?"Current: "+last+" "+sk.unit:"No entries yet") + ' → Goal: <strong style="color:var(--gold)">' + goal + ' ' + sk.unit + '</strong></div></div>' +
+      '<div style="font-size:12px;color:var(--text2)">' + (last!==null?"Current: "+formatScore(last, sk):"No entries yet") + ' → Goal: <strong style="color:var(--gold)">' + formatScore(goal, sk) + '</strong></div></div>' +
       '<span class="badge ' + (achieved?"b-gold":"b-gray") + '">' + (achieved?"✓ Done!":"In progress") + '</span></div>';
   }).filter(Boolean).join("") : '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">Set your goals above and track your progress here.</div>');
 }
@@ -1692,7 +1755,10 @@ function saveStudentGoals() {
   var goals = {};
   skills.forEach(function(sk) {
     var el = document.getElementById("sg-" + sk.id);
-    if (el && el.value) goals[sk.id] = parseFloat(el.value);
+    if (el && el.value) {
+      var gp = parseTimeInput(el.value, sk);
+      if (gp.ok) goals[sk.id] = gp.value;
+    }
   });
   studentGoals[s.id] = goals;
 
@@ -1707,12 +1773,19 @@ function submitScores() {
   var btn = document.getElementById("submit-btn");
   btn.disabled = true; btn.textContent = "Saving…";
   var week = "Week of " + new Date().toLocaleDateString("en-US", {month:"short", day:"numeric"});
-  var rows = skills.filter(function(sk) {
+  var rows = [];
+  for (var si = 0; si < skills.length; si++) {
+    var sk = skills[si];
     var v = document.getElementById("ef-" + sk.id);
-    return v && v.value !== "";
-  }).map(function(sk) {
-    return {student_id: portalStudent.id, skill_id: sk.id, value: parseFloat(document.getElementById("ef-" + sk.id).value), week_label: week};
-  });
+    if (!v || !String(v.value).trim()) continue;
+    var parsed = parseTimeInput(v.value, sk);
+    if (!parsed.ok) {
+      btn.disabled = false; btn.textContent = "Submit Scores";
+      alert(sk.name + ": " + parsed.error);
+      return;
+    }
+    rows.push({student_id: portalStudent.id, skill_id: sk.id, value: parsed.value, week_label: week});
+  }
   if (!rows.length) { btn.disabled = false; btn.textContent = "Submit Scores"; return; }
   sb.from("entries").insert(rows).then(function(r) {
     if (!r.error) {
@@ -2325,7 +2398,7 @@ function openSP(id) {
   var goals = studentGoals[s.id] || {};
   setHTML("sp-goals", skills.map(function(sk) {
     var last = getLast(s.id, sk.id);
-    return '<div><label class="lbl">' + sk.name + ' goal (' + sk.unit + ')</label><input type="number" step="0.1" id="goal-' + sk.id + '" placeholder="' + (last !== null ? "Current: " + last : "No entries yet") + '" value="' + (goals[sk.id] || "") + '" style="font-size:14px"/></div>';
+    return '<div><label class="lbl">' + sk.name + ' goal (' + (isTimeSkill(sk) ? "sec or mm:ss" : sk.unit) + ')</label><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="' + (last !== null ? formatTimeValue(last, sk) : "6:42") + '" value="' + (goals[sk.id] ? formatTimeValue(goals[sk.id], sk) : "") + '"' : 'type="number" step="0.1" placeholder="' + (last !== null ? "Current: " + last : "No entries yet") + '" value="' + (goals[sk.id] || "") + '"') + ' id="goal-' + sk.id + '" style="font-size:14px"/></div>';
   }).join(""));
   setHTML("sp-charts", skills.map(function(sk) {
     var vals = getVals(s.id, sk.id), rank = getRank(s.id, sk.id), imp = getImp(s.id, sk.id);
@@ -2349,8 +2422,8 @@ function openSP(id) {
       '<div class="row" style="margin-bottom:10px"><div style="flex:1"><div style="font-weight:600;font-size:14px">' + sk.name + '</div><div style="font-size:12px;color:var(--text2)">' + sk.unit + ' · ' + (sk.lower_better?"↓ lower=better":"↑ higher=better") + '</div></div><div style="display:flex;gap:6px;align-items:center">' + rankBadge(rank) + (imp?'<span style="font-size:12px;color:' + (imp.ok?"var(--gold)":"var(--red)") + '">' + (imp.ok?"▲":"▼") + imp.pct + '%</span>':"") + '</div></div>' +
       (vals.length ?
         '<div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">' +
-        '<div style="font-size:12px"><span style="color:var(--text3)">Latest</span> <strong>' + last + ' ' + sk.unit + '</strong></div>' +
-        '<div style="font-size:12px"><span style="color:var(--text3)">Best</span> <strong style="color:var(--gold)">' + best + ' ' + sk.unit + '</strong></div>' +
+        '<div style="font-size:12px"><span style="color:var(--text3)">Latest</span> <strong>' + formatScore(last, sk) + '</strong></div>' +
+        '<div style="font-size:12px"><span style="color:var(--text3)">Best</span> <strong style="color:var(--gold)">' + formatScore(best, sk) + '</strong></div>' +
         (goal ? '<div style="font-size:12px"><span style="color:var(--text3)">Goal</span> <strong style="color:var(--gold)">' + goal + ' ' + sk.unit + '</strong> <span style="color:' + ((sk.lower_better?last<=goal:last>=goal)?"#4CAF50":"var(--red)") + '">' + ((sk.lower_better?last<=goal:last>=goal)?"✓ Achieved!":"(" + Math.abs(last-goal).toFixed(1) + " away)") + '</span></div>' : "") +
         '</div>' + bars +
         (imp ? '<div style="margin-top:10px;font-size:12px;color:var(--text2);background:var(--surface2);padding:6px 10px;border-radius:6px">' + (imp.ok ? '📈 Improved by <strong style="color:var(--gold)">' + imp.pct + '%</strong> since first entry!' : '📉 Down <strong style="color:var(--red)">' + imp.pct + '%</strong> from first entry.') + '</div>' : "")
@@ -2367,7 +2440,12 @@ function saveGoals() {
   var s = students.find(function(x) { return (x.first + " " + x.last) === spName; });
   if (!s) return;
   var goals = {};
-  skills.forEach(function(sk) { var el = document.getElementById("goal-" + sk.id); if (el && el.value) goals[sk.id] = parseFloat(el.value); });
+  skills.forEach(function(sk) {
+    var el = document.getElementById("goal-" + sk.id);
+    if (!el || !el.value) return;
+    var gp = parseTimeInput(el.value, sk);
+    if (gp.ok) goals[sk.id] = gp.value;
+  });
   studentGoals[s.id] = goals;
   openSP(s.id);
 }
@@ -2563,7 +2641,7 @@ function importScores() {
     return {
       student_id: r.student.id,
       skill_id:   r.skill.id,
-      value:      parseFloat(r.value),
+      value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? p.value : parseFloat(r.value); })(),
       week_label: r.week
     };
   });
@@ -2626,7 +2704,7 @@ function buildGrid() {
 
   // Update column header
   var header = document.getElementById("grid-unit-header");
-  if (header && sk) header.textContent = sk.name + " (" + sk.unit + ")";
+  if (header && sk) header.textContent = sk.name + (isTimeSkill(sk) ? " (sec or mm:ss)" : " (" + sk.unit + ")");
 
   var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
   list = list.slice().sort(function(a,b) { return a.last.localeCompare(b.last); });
@@ -2639,11 +2717,12 @@ function buildGrid() {
     return '<tr>' +
       '<td><div class="row">' + avHTML(s.first, s.last, 26) +
         '<div><div style="font-weight:500;font-size:13px">' + s.first + ' ' + s.last + '</div>' +
-        (existing !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + existing + ' ' + (sk?sk.unit:"") + '</div>' : '') +
+        (existing !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(existing, sk) + '</div>' : '') +
         '</div></div></td>' +
       '<td style="color:var(--text2);font-size:13px">P' + s.period + '</td>' +
-      '<td><input type="number" step="0.1" inputmode="decimal" id="grid-' + s.id + '" placeholder="—"' +
-        ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:120px"' +
+      '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
+        ' id="grid-' + s.id + '"' +
+        ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:140px"' +
         ' onkeydown=\"gridKeyNav(event,this)\"/></td>' +
       '</tr>';
   }).join("");
@@ -2666,20 +2745,23 @@ function saveGrid() {
   if (!sk) { if(okEl) okEl.innerHTML = '<div class="alert a-err">Select a skill first.</div>'; return; }
 
   var rows = [];
+  var parseErr = "";
   document.querySelectorAll("#score-grid-body input").forEach(function(el) {
-    if (!el.value || el.value.trim() === "") return;
-    var val = parseFloat(el.value);
-    if (isNaN(val)) return;
-    // el.id is "grid-STUDENT_UUID" — strip the prefix
-    var sid = el.id.substring(5); // removes "grid-"
-    // Verify this student belongs to this teacher
+    if (parseErr || !el.value || el.value.trim() === "") return;
+    var parsed = parseTimeInput(el.value, sk);
+    if (!parsed.ok) { parseErr = parsed.error; return; }
+    var sid = el.id.substring(5);
     var student = students.find(function(s) { return s.id === sid; });
     if (!student) return;
-    rows.push({ student_id: sid, skill_id: skid, value: val, week_label: week });
+    rows.push({ student_id: sid, skill_id: skid, value: parsed.value, week_label: week });
   });
+  if (parseErr) {
+    if (okEl) okEl.innerHTML = '<div class="alert a-err">' + parseErr + '</div>';
+    return;
+  }
 
   if (!rows.length) {
-    if (okEl) okEl.innerHTML = '<div class="alert a-err">No scores entered. Type a number in at least one row.</div>';
+    if (okEl) okEl.innerHTML = '<div class="alert a-err">No scores entered. Type a time or number in at least one row.</div>';
     return;
   }
 
@@ -3240,7 +3322,7 @@ function openSP(id) {
   var goals = studentGoals[s.id] || {};
   setHTML("sp-goals", skills.map(function(sk) {
     var last = getLast(s.id, sk.id);
-    return '<div><label class="lbl">' + sk.name + ' goal (' + sk.unit + ')</label><input type="number" step="0.1" id="goal-' + sk.id + '" placeholder="' + (last !== null ? "Current: " + last : "No entries yet") + '" value="' + (goals[sk.id] || "") + '" style="font-size:14px"/></div>';
+    return '<div><label class="lbl">' + sk.name + ' goal (' + (isTimeSkill(sk) ? "sec or mm:ss" : sk.unit) + ')</label><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="' + (last !== null ? formatTimeValue(last, sk) : "6:42") + '" value="' + (goals[sk.id] ? formatTimeValue(goals[sk.id], sk) : "") + '"' : 'type="number" step="0.1" placeholder="' + (last !== null ? "Current: " + last : "No entries yet") + '" value="' + (goals[sk.id] || "") + '"') + ' id="goal-' + sk.id + '" style="font-size:14px"/></div>';
   }).join(""));
   setHTML("sp-charts", skills.map(function(sk) {
     var vals = getVals(s.id, sk.id), rank = getRank(s.id, sk.id), imp = getImp(s.id, sk.id);
@@ -3264,8 +3346,8 @@ function openSP(id) {
       '<div class="row" style="margin-bottom:10px"><div style="flex:1"><div style="font-weight:600;font-size:14px">' + sk.name + '</div><div style="font-size:12px;color:var(--text2)">' + sk.unit + ' · ' + (sk.lower_better?"↓ lower=better":"↑ higher=better") + '</div></div><div style="display:flex;gap:6px;align-items:center">' + rankBadge(rank) + (imp?'<span style="font-size:12px;color:' + (imp.ok?"var(--gold)":"var(--red)") + '">' + (imp.ok?"▲":"▼") + imp.pct + '%</span>':"") + '</div></div>' +
       (vals.length ?
         '<div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">' +
-        '<div style="font-size:12px"><span style="color:var(--text3)">Latest</span> <strong>' + last + ' ' + sk.unit + '</strong></div>' +
-        '<div style="font-size:12px"><span style="color:var(--text3)">Best</span> <strong style="color:var(--gold)">' + best + ' ' + sk.unit + '</strong></div>' +
+        '<div style="font-size:12px"><span style="color:var(--text3)">Latest</span> <strong>' + formatScore(last, sk) + '</strong></div>' +
+        '<div style="font-size:12px"><span style="color:var(--text3)">Best</span> <strong style="color:var(--gold)">' + formatScore(best, sk) + '</strong></div>' +
         (goal ? '<div style="font-size:12px"><span style="color:var(--text3)">Goal</span> <strong style="color:var(--gold)">' + goal + ' ' + sk.unit + '</strong> <span style="color:' + ((sk.lower_better?last<=goal:last>=goal)?"#4CAF50":"var(--red)") + '">' + ((sk.lower_better?last<=goal:last>=goal)?"✓ Achieved!":"(" + Math.abs(last-goal).toFixed(1) + " away)") + '</span></div>' : "") +
         '</div>' + bars +
         (imp ? '<div style="margin-top:10px;font-size:12px;color:var(--text2);background:var(--surface2);padding:6px 10px;border-radius:6px">' + (imp.ok ? '📈 Improved by <strong style="color:var(--gold)">' + imp.pct + '%</strong> since first entry!' : '📉 Down <strong style="color:var(--red)">' + imp.pct + '%</strong> from first entry.') + '</div>' : "")
@@ -3282,7 +3364,12 @@ function saveGoals() {
   var s = students.find(function(x) { return (x.first + " " + x.last) === spName; });
   if (!s) return;
   var goals = {};
-  skills.forEach(function(sk) { var el = document.getElementById("goal-" + sk.id); if (el && el.value) goals[sk.id] = parseFloat(el.value); });
+  skills.forEach(function(sk) {
+    var el = document.getElementById("goal-" + sk.id);
+    if (!el || !el.value) return;
+    var gp = parseTimeInput(el.value, sk);
+    if (gp.ok) goals[sk.id] = gp.value;
+  });
   studentGoals[s.id] = goals;
   openSP(s.id);
 }
@@ -3478,7 +3565,7 @@ function importScores() {
     return {
       student_id: r.student.id,
       skill_id:   r.skill.id,
-      value:      parseFloat(r.value),
+      value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? p.value : parseFloat(r.value); })(),
       week_label: r.week
     };
   });
@@ -3541,7 +3628,7 @@ function buildGrid() {
 
   // Update column header
   var header = document.getElementById("grid-unit-header");
-  if (header && sk) header.textContent = sk.name + " (" + sk.unit + ")";
+  if (header && sk) header.textContent = sk.name + (isTimeSkill(sk) ? " (sec or mm:ss)" : " (" + sk.unit + ")");
 
   var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
   list = list.slice().sort(function(a,b) { return a.last.localeCompare(b.last); });
@@ -3554,11 +3641,12 @@ function buildGrid() {
     return '<tr>' +
       '<td><div class="row">' + avHTML(s.first, s.last, 26) +
         '<div><div style="font-weight:500;font-size:13px">' + s.first + ' ' + s.last + '</div>' +
-        (existing !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + existing + ' ' + (sk?sk.unit:"") + '</div>' : '') +
+        (existing !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(existing, sk) + '</div>' : '') +
         '</div></div></td>' +
       '<td style="color:var(--text2);font-size:13px">P' + s.period + '</td>' +
-      '<td><input type="number" step="0.1" inputmode="decimal" id="grid-' + s.id + '" placeholder="—"' +
-        ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:120px"' +
+      '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
+        ' id="grid-' + s.id + '"' +
+        ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:140px"' +
         ' onkeydown=\"gridKeyNav(event,this)\"/></td>' +
       '</tr>';
   }).join("");
@@ -3581,20 +3669,23 @@ function saveGrid() {
   if (!sk) { if(okEl) okEl.innerHTML = '<div class="alert a-err">Select a skill first.</div>'; return; }
 
   var rows = [];
+  var parseErr = "";
   document.querySelectorAll("#score-grid-body input").forEach(function(el) {
-    if (!el.value || el.value.trim() === "") return;
-    var val = parseFloat(el.value);
-    if (isNaN(val)) return;
-    // el.id is "grid-STUDENT_UUID" — strip the prefix
-    var sid = el.id.substring(5); // removes "grid-"
-    // Verify this student belongs to this teacher
+    if (parseErr || !el.value || el.value.trim() === "") return;
+    var parsed = parseTimeInput(el.value, sk);
+    if (!parsed.ok) { parseErr = parsed.error; return; }
+    var sid = el.id.substring(5);
     var student = students.find(function(s) { return s.id === sid; });
     if (!student) return;
-    rows.push({ student_id: sid, skill_id: skid, value: val, week_label: week });
+    rows.push({ student_id: sid, skill_id: skid, value: parsed.value, week_label: week });
   });
+  if (parseErr) {
+    if (okEl) okEl.innerHTML = '<div class="alert a-err">' + parseErr + '</div>';
+    return;
+  }
 
   if (!rows.length) {
-    if (okEl) okEl.innerHTML = '<div class="alert a-err">No scores entered. Type a number in at least one row.</div>';
+    if (okEl) okEl.innerHTML = '<div class="alert a-err">No scores entered. Type a time or number in at least one row.</div>';
     return;
   }
 
@@ -3685,7 +3776,7 @@ function renderEditEntries() {
     info.innerHTML =
       '<div style="font-size:12px;color:var(--text2);margin-bottom:2px">' + (e.week_label || "Week " + (i+1)) + '</div>' +
       '<div style="font-size:20px;font-weight:600;color:' + (i === raw.length-1 ? "var(--gold)" : "var(--text)") + '">' +
-        e.value + ' <span style="font-size:13px;font-weight:400;color:var(--text2)">' + (sk ? sk.unit : "") + '</span>' +
+        formatScore(e.value, sk) +
       '</div>' +
       (i > 0
         ? '<div style="font-size:11px;color:' + (improving ? "var(--gold)" : "var(--red)") + '">' + (improving ? "▲" : "▼") + " from previous</div>"
@@ -3727,10 +3818,11 @@ function handleDeleteClick(btn) {
 }
 function editEntry(entryId, skid, currentValue, weekLabel) {
   var sk = skills.find(function(x) { return x.id === skid; });
-  var newVal = prompt("Edit " + (sk ? sk.name : "score") + " [" + weekLabel + "] — current: " + currentValue + " " + (sk ? sk.unit : ""), currentValue);
+  var newVal = prompt("Edit " + (sk ? sk.name : "score") + " [" + weekLabel + "] — current: " + formatScore(currentValue, sk) + (isTimeSkill(sk) ? "  (seconds or mm:ss)" : ""), isTimeSkill(sk) ? formatTimeValue(currentValue, sk) : currentValue);
   if (newVal === null || newVal.trim() === "") return;
-  var parsed = parseFloat(newVal);
-  if (isNaN(parsed)) { alert("Please enter a valid number."); return; }
+  var parsedIn = parseTimeInput(newVal, sk);
+  if (!parsedIn.ok) { alert(parsedIn.error || "Please enter a valid score."); return; }
+  var parsed = parsedIn.value;
 
   alertEl("edit-alert", "Saving…", "ok");
   sb.from("entries").update({ value: parsed }).eq("id", entryId).then(function(r) {
