@@ -347,6 +347,34 @@ tr:hover td{background:rgba(255,255,255,0.03)}
   -webkit-text-fill-color: #1A1E38 !important;
   font-size: 15px !important;
 }
+
+/* Student name search sits on the light page — keep typed text dark */
+#portal-search,
+#portal-period,
+#portal-sort,
+#ver-code {
+  color: #1A1E38 !important;
+  background: #FFFFFF !important;
+  border: 1px solid rgba(26,30,56,0.22) !important;
+  -webkit-text-fill-color: #1A1E38 !important;
+  caret-color: #1A1E38;
+  color-scheme: light;
+}
+#portal-search::placeholder,
+#ver-code::placeholder {
+  color: rgba(26,30,56,0.45) !important;
+  -webkit-text-fill-color: rgba(26,30,56,0.45) !important;
+}
+#portal-search:focus,
+#portal-period:focus,
+#portal-sort:focus,
+#ver-code:focus {
+  border-color: var(--gold3) !important;
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.15) !important;
+  background: #fff !important;
+  color: #1A1E38 !important;
+  -webkit-text-fill-color: #1A1E38 !important;
+}
 #login-page input::placeholder {
   color: rgba(26,30,56,0.38) !important;
   -webkit-text-fill-color: rgba(26,30,56,0.38) !important;
@@ -945,6 +973,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
 var ADMIN_EMAIL = "chuynh@lasdschools.org";
 
@@ -2137,24 +2166,49 @@ function closeQR() { document.getElementById("qr-modal").classList.add("hidden")
 function genQR() {
   if (!ME) return;
   var period = (document.getElementById("qr-period") || {}).value || "all";
-  var base = location.origin + location.pathname.replace(/\/[^/]*$/, "/") + "student.html";
-  currentQRUrl = base + "?t=" + ME.id + (period !== "all" ? "&p=" + period : "");
+  currentQRUrl = location.origin.replace(/\/$/, "") + "/student.html?t=" + encodeURIComponent(ME.id) + (period !== "all" ? "&p=" + encodeURIComponent(period) : "");
   document.getElementById("qr-url").textContent = currentQRUrl;
   var wrap = document.getElementById("qr-wrap");
   wrap.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading QR…</div>';
-  var img = new Image();
-  img.style.cssText = "border-radius:8px;border:8px solid #fff;display:block;width:220px;height:220px";
-  img.alt = "QR Code";
-  img.onload  = function() { wrap.innerHTML = ""; wrap.appendChild(img); };
-  img.onerror = function() { wrap.innerHTML = '<div style="color:var(--text2);font-size:12px;text-align:center;padding:1rem">QR failed. Share the link below.</div>'; };
-  img.src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(currentQRUrl) + "&bgcolor=ffffff&color=0D1B3E&margin=10&format=png";
+
+  function paint(el) {
+    el.style.cssText = "border-radius:8px;border:8px solid #fff;display:block;width:220px;height:220px;background:#fff";
+    wrap.innerHTML = "";
+    wrap.appendChild(el);
+  }
+  function fallbackImg() {
+    var img = new Image();
+    img.alt = "QR Code";
+    img.onload = function() { paint(img); };
+    img.onerror = function() {
+      wrap.innerHTML = '<div style="color:#4A5068;font-size:12px;text-align:center;padding:1rem">QR image failed. Copy the link below.</div>';
+    };
+    img.src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(currentQRUrl) + "&bgcolor=ffffff&color=0D1B3E&margin=10&format=png";
+  }
+  if (window.QRCode && typeof QRCode.toCanvas === "function") {
+    var canvas = document.createElement("canvas");
+    QRCode.toCanvas(canvas, currentQRUrl, { width: 220, margin: 2, color: { dark: "#0D1B3E", light: "#ffffff" } }, function(err) {
+      if (err) fallbackImg();
+      else paint(canvas);
+    });
+  } else {
+    fallbackImg();
+  }
 }
 function downloadQR() {
+  var canvas = document.querySelector("#qr-wrap canvas");
+  if (canvas) {
+    var a = document.createElement("a");
+    a.download = "vikingstrong-qr.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+    return;
+  }
   var img = document.querySelector("#qr-wrap img");
   if (!img) { alert("QR not ready yet."); return; }
   fetch(img.src).then(function(r) { return r.blob(); }).then(function(b) {
     var a = document.createElement("a");
-    a.download = "pe-qr.png";
+    a.download = "vikingstrong-qr.png";
     a.href = URL.createObjectURL(b);
     a.click();
     setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
@@ -3027,24 +3081,49 @@ function closeQR() { document.getElementById("qr-modal").classList.add("hidden")
 function genQR() {
   if (!ME) return;
   var period = (document.getElementById("qr-period") || {}).value || "all";
-  var base = location.origin + location.pathname.replace(/\/[^/]*$/, "/") + "student.html";
-  currentQRUrl = base + "?t=" + ME.id + (period !== "all" ? "&p=" + period : "");
+  currentQRUrl = location.origin.replace(/\/$/, "") + "/student.html?t=" + encodeURIComponent(ME.id) + (period !== "all" ? "&p=" + encodeURIComponent(period) : "");
   document.getElementById("qr-url").textContent = currentQRUrl;
   var wrap = document.getElementById("qr-wrap");
   wrap.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading QR…</div>';
-  var img = new Image();
-  img.style.cssText = "border-radius:8px;border:8px solid #fff;display:block;width:220px;height:220px";
-  img.alt = "QR Code";
-  img.onload  = function() { wrap.innerHTML = ""; wrap.appendChild(img); };
-  img.onerror = function() { wrap.innerHTML = '<div style="color:var(--text2);font-size:12px;text-align:center;padding:1rem">QR failed. Share the link below.</div>'; };
-  img.src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(currentQRUrl) + "&bgcolor=ffffff&color=0D1B3E&margin=10&format=png";
+
+  function paint(el) {
+    el.style.cssText = "border-radius:8px;border:8px solid #fff;display:block;width:220px;height:220px;background:#fff";
+    wrap.innerHTML = "";
+    wrap.appendChild(el);
+  }
+  function fallbackImg() {
+    var img = new Image();
+    img.alt = "QR Code";
+    img.onload = function() { paint(img); };
+    img.onerror = function() {
+      wrap.innerHTML = '<div style="color:#4A5068;font-size:12px;text-align:center;padding:1rem">QR image failed. Copy the link below.</div>';
+    };
+    img.src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(currentQRUrl) + "&bgcolor=ffffff&color=0D1B3E&margin=10&format=png";
+  }
+  if (window.QRCode && typeof QRCode.toCanvas === "function") {
+    var canvas = document.createElement("canvas");
+    QRCode.toCanvas(canvas, currentQRUrl, { width: 220, margin: 2, color: { dark: "#0D1B3E", light: "#ffffff" } }, function(err) {
+      if (err) fallbackImg();
+      else paint(canvas);
+    });
+  } else {
+    fallbackImg();
+  }
 }
 function downloadQR() {
+  var canvas = document.querySelector("#qr-wrap canvas");
+  if (canvas) {
+    var a = document.createElement("a");
+    a.download = "vikingstrong-qr.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+    return;
+  }
   var img = document.querySelector("#qr-wrap img");
   if (!img) { alert("QR not ready yet."); return; }
   fetch(img.src).then(function(r) { return r.blob(); }).then(function(b) {
     var a = document.createElement("a");
-    a.download = "pe-qr.png";
+    a.download = "vikingstrong-qr.png";
     a.href = URL.createObjectURL(b);
     a.click();
     setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);

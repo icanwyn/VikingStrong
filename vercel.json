@@ -3,6 +3,7 @@
     {
       "source": "/api/supabase/:path*",
       "destination": "https://jhklcmxtvrinfntjwhaw.supabase.co/:path*"
-    }
+    },
+    { "source": "/student", "destination": "/student.html" }
   ]
 }

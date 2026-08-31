@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>VikingStrong — Log My Scores</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:#E8E8EC;
+  --card:#1E2340;
+  --gold:#C9A84C;
+  --gold2:#E8C86A;
+  --gold3:#A8882C;
+  --text:#1A1E38;
+  --text2:#4A5068;
+  --text3:#6B7388;
+  --red:#C0392B;
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  font-family:'DM Sans',sans-serif;
+  font-size:15px;
+  background-image:
+    radial-gradient(ellipse at 80% 0%, rgba(201,168,76,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 100%, rgba(30,35,64,0.05) 0%, transparent 40%);
+  color-scheme: light;
+}
+input,select{
+  font-family:inherit;font-size:16px;color:#1A1E38;background:#fff;
+  border:1px solid rgba(26,30,56,0.22);border-radius:10px;padding:12px 14px;outline:none;width:100%;
+  -webkit-text-fill-color:#1A1E38;caret-color:#1A1E38;color-scheme:light;
+}
+input::placeholder{color:rgba(26,30,56,0.45);-webkit-text-fill-color:rgba(26,30,56,0.45)}
+input:focus,select:focus{border-color:var(--gold3);box-shadow:0 0 0 3px rgba(201,168,76,0.15);background:#fff}
+select option{background:#fff;color:#1A1E38}
+button{
+  font-family:inherit;font-size:15px;font-weight:500;cursor:pointer;
+  border:1px solid rgba(30,35,64,0.15);border-radius:10px;
+  background:#fff;color:var(--text);padding:12px 20px;width:100%;
+}
+button:hover{background:var(--card);color:#F0EDE8}
+button.primary{
+  background:linear-gradient(135deg,var(--gold2),var(--gold),var(--gold3));
+  color:#1A1E38;border-color:rgba(232,200,106,0.4);font-weight:700;
+}
+.card{background:#fff;border:1px solid rgba(30,35,64,0.08);border-radius:var(--radius);padding:1.25rem;box-shadow:0 2px 16px rgba(30,35,64,0.1)}
+.hidden{display:none!important}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px}
+.badge-gold{background:linear-gradient(135deg,#F0D98B,#C9A84C);color:#1A1E38}
+.badge-gray{background:#F0F1F4;color:var(--text2);border:1px solid rgba(30,35,64,0.12)}
+.alert{padding:12px 16px;border-radius:10px;font-size:14px;margin-bottom:14px}
+.alert-error{background:rgba(192,57,43,0.1);color:var(--red)}
+.alert-success{background:rgba(201,168,76,0.15);color:#8B6A30}
+.mono{font-family:'DM Mono',monospace;letter-spacing:.05em}
+.spinner{width:28px;height:28px;border:2px solid rgba(201,168,76,0.25);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin:2rem auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+#top-bar{
+  background:#1A1E38;border-bottom:1px solid rgba(201,168,76,0.2);
+  padding:.875rem 1.25rem;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:100;
+}
+#wrap{max-width:480px;margin:0 auto;padding:1.25rem}
+.steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:1.5rem}
+.step{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
+.step.active{color:var(--gold3)}
+.step-dot{width:24px;height:24px;border-radius:50%;border:1.5px solid rgba(30,35,64,0.18);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:#fff}
+.step.active .step-dot{border-color:var(--gold);background:rgba(201,168,76,0.15);color:var(--gold3)}
+.step.done .step-dot{border-color:var(--gold);background:var(--gold);color:#1A1E38}
+.step-line{width:32px;height:1px;background:rgba(30,35,64,0.15)}
+.rank-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F0F1F4;border-radius:10px;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div id="top-bar">
+  <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(145deg,#C4973F,#8B6A30);display:flex;align-items:center;justify-content:center;font-size:18px">🏆</div>
+  <div>
+    <div style="font-family:'Cormorant Garamond',serif;font-weight:700;font-size:16px;letter-spacing:.08em;color:#E8C86A">VIKINGSTRONG</div>
+    <div id="teacher-label" style="font-size:11px;color:rgba(240,237,232,0.55)">Loading…</div>
+  </div>
+</div>
+<div id="wrap">
+  <div id="screen-loading"><div class="spinner"></div></div>
+
+  <div id="screen-error" class="hidden" style="text-align:center;padding:3rem 1rem">
+    <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--gold3);margin-bottom:8px">Invalid Link</div>
+    <div style="font-size:14px;color:var(--text2)" id="error-msg">This QR code or link is no longer valid. Ask your teacher for a new one.</div>
+  </div>
+
+  <div id="screen-select" class="hidden">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Log Your Scores</div>
+    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px">Find your name and enter your code</div>
+    <div class="steps">
+      <div class="step active"><div class="step-dot">1</div><span>Name</span></div>
+      <div class="step-line"></div>
+      <div class="step"><div class="step-dot">2</div><span>Verify</span></div>
+      <div class="step-line"></div>
+      <div class="step"><div class="step-dot">3</div><span>Scores</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+      <input id="s-search" placeholder="🔍 Type your name…" oninput="filterStudents()"/>
+      <div style="display:flex;gap:8px">
+        <select id="s-period" onchange="filterStudents()" style="flex:1;width:auto"><option value="all">All Periods</option></select>
+        <select id="s-sort" onchange="filterStudents()" style="flex:1;width:auto">
+          <option value="first">By First Name</option>
+          <option value="last">By Last Name</option>
+        </select>
+      </div>
+    </div>
+    <div id="s-alpha" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
+    <div id="s-count" style="font-size:12px;color:var(--text3);margin-bottom:10px"></div>
+    <div id="s-list" style="display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow-y:auto"></div>
+  </div>
+
+  <div id="screen-verify" class="hidden">
+    <div class="steps">
+      <div class="step done"><div class="step-dot">✓</div><span>Name</span></div>
+      <div class="step-line"></div>
+      <div class="step active"><div class="step-dot">2</div><span>Verify</span></div>
+      <div class="step-line"></div>
+      <div class="step"><div class="step-dot">3</div><span>Scores</span></div>
+    </div>
+    <div class="card">
+      <button onclick="goBack('select')" style="width:auto;padding:6px 14px;font-size:13px;margin-bottom:18px;background:none;border:none;color:var(--text2)">← Back</button>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px">
+        <div id="v2-avatar" style="width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0"></div>
+        <div>
+          <div id="v2-name" style="font-weight:600;font-size:18px"></div>
+          <div id="v2-sub" style="font-size:13px;color:var(--text2)"></div>
+        </div>
+      </div>
+      <label style="display:block;font-size:11px;color:var(--text2);margin-bottom:6px;letter-spacing:.06em;text-transform:uppercase;font-weight:600">Enter your animal code</label>
+      <input id="v2-code" class="mono" placeholder="e.g. Fox42" style="font-size:22px;text-align:center;letter-spacing:.1em;padding:14px;margin-bottom:10px" onkeydown="if(event.key==='Enter')verifyCode()"/>
+      <div id="v2-error" class="hidden alert alert-error"></div>
+      <button class="primary" onclick="verifyCode()">Confirm Identity →</button>
+      <div style="font-size:12px;color:var(--text3);text-align:center;margin-top:12px">Lost your code? Ask your teacher.</div>
+    </div>
+  </div>
+
+  <div id="screen-scores" class="hidden">
+    <div class="steps">
+      <div class="step done"><div class="step-dot">✓</div><span>Name</span></div>
+      <div class="step-line"></div>
+      <div class="step done"><div class="step-dot">✓</div><span>Verify</span></div>
+      <div class="step-line"></div>
+      <div class="step active"><div class="step-dot">3</div><span>Scores</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem">
+      <div id="d-avatar" style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700"></div>
+      <div style="flex:1">
+        <div id="d-name" style="font-weight:600;font-size:16px"></div>
+        <div id="d-sub" style="font-size:12px;color:var(--text2)"></div>
+      </div>
+      <button onclick="goBack('select')" style="width:auto;padding:6px 12px;font-size:12px;background:none;color:var(--text2)">Switch</button>
+    </div>
+    <div style="text-align:center;margin-bottom:16px">
+      <span id="week-label" style="font-size:12px;color:var(--text3);background:#fff;padding:4px 14px;border-radius:99px;border:1px solid rgba(30,35,64,0.12)"></span>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📋 This Week's Scores</div>
+      <div id="score-fields"></div>
+      <div id="score-alert" style="margin-top:10px"></div>
+      <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save My Scores ✓</button>
+    </div>
+    <div class="card">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📈 My Progress</div>
+      <div id="my-progress"></div>
+    </div>
+  </div>
+
+  <div id="screen-success" class="hidden" style="text-align:center;padding:2rem 0">
+    <div style="font-size:52px;margin-bottom:16px">🏆</div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:700;color:var(--gold3);margin-bottom:8px">Scores Saved!</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:24px" id="success-msg">Great work this week.</div>
+    <div class="card" style="margin-bottom:14px;text-align:left">
+      <div style="font-size:12px;font-weight:600;color:var(--gold3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Your Rankings</div>
+      <div id="success-ranks"></div>
+    </div>
+    <button onclick="goBack('select')" style="background:none;color:var(--text2);width:auto;padding:8px 20px;font-size:13px">Done — Switch Student</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+var teacherId = null, teacherInfo = null, students = [], skills = [], entries = {}, selectedStudent = null, sb = null;
+var params = new URLSearchParams(location.search);
+teacherId = params.get("t");
+var urlPeriod = params.get("p");
+
+var AB = ["#1E2340","#263060","#2E3858","#8090A8","#C9A84C","#1A1E38"];
+var AT = ["#E8C86A","#F0EDE8","#E8C86A","#F0EDE8","#1A1E38","#E8C86A"];
+function avStyle(f, l, sz) {
+  var h = (f.charCodeAt(0) * 7 + l.charCodeAt(0) * 13) % 6;
+  return "width:" + sz + "px;height:" + sz + "px;background:" + AB[h] + ";color:" + AT[h] + ";font-size:" + Math.round(sz * .38) + "px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0";
+}
+function avHTML(f, l, sz) {
+  return '<div style="' + avStyle(f, l, sz || 36) + '">' + f[0] + l[0] + "</div>";
+}
+function show(id) {
+  ["screen-loading","screen-error","screen-select","screen-verify","screen-scores","screen-success"].forEach(function(s) {
+    document.getElementById(s).classList.add("hidden");
+  });
+  document.getElementById(id).classList.remove("hidden");
+}
+function getVals(sid, skid) { return (entries[sid] && entries[sid][skid]) || []; }
+function getLastVal(sid, skid) { var v = getVals(sid, skid); return v.length ? v[v.length - 1] : null; }
+function getRanked(skid) {
+  var sk = skills.find(function(s) { return s.id === skid; });
+  return students.map(function(s) { return { id: s.id, val: getLastVal(s.id, skid) }; })
+    .filter(function(s) { return s.val !== null; })
+    .sort(function(a, b) { return sk && sk.lower_better ? a.val - b.val : b.val - a.val; });
+}
+function getRank(sid, skid) {
+  var i = getRanked(skid).findIndex(function(s) { return s.id === sid; });
+  return i === -1 ? null : i + 1;
+}
+function rankBadge(r, total) {
+  if (!r) return "";
+  if (r === 1) return '<span class="badge badge-gold">🥇 #1</span>';
+  if (r === 2) return '<span class="badge badge-gold">🥈 #2</span>';
+  if (r === 3) return '<span class="badge badge-gold">🥉 #3</span>';
+  return '<span class="badge badge-gray">#' + r + " of " + total + "</span>";
+}
+
+function bootStudent() {
+  if (!teacherId) {
+    document.getElementById("error-msg").textContent = "No teacher ID in URL. Scan your teacher's QR code.";
+    show("screen-error");
+    return;
+  }
+  sb.from("teachers").select("*").eq("id", teacherId).single().then(function(tr) {
+    if (tr.error || !tr.data) { show("screen-error"); return; }
+    teacherInfo = tr.data;
+    document.getElementById("teacher-label").textContent = (teacherInfo.name || "PE Class") + (teacherInfo.school ? " · " + teacherInfo.school : "");
+    document.title = "Log Scores — " + (teacherInfo.name || "VikingStrong");
+    return Promise.all([
+      sb.from("students").select("*").eq("teacher_id", teacherId).order("last"),
+      sb.from("skills").select("*").eq("teacher_id", teacherId).order("created_at")
+    ]);
+  }).then(function(res) {
+    if (!res) return;
+    students = (res[0] && res[0].data) || [];
+    skills = (res[1] && res[1].data) || [];
+    if (!students.length) {
+      filterStudents();
+      show("screen-select");
+      return;
+    }
+    var ids = students.map(function(s) { return s.id; });
+    return sb.from("entries").select("*").in("student_id", ids).order("logged_at").then(function(er) {
+      (er.data || []).forEach(function(e) {
+        if (!entries[e.student_id]) entries[e.student_id] = {};
+        if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
+        entries[e.student_id][e.skill_id].push(Number(e.value));
+      });
+      var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
+      var pf = document.getElementById("s-period");
+      periods.forEach(function(p) {
+        var o = document.createElement("option");
+        o.value = p;
+        o.textContent = "Period " + p;
+        pf.appendChild(o);
+      });
+      if (urlPeriod && periods.map(String).indexOf(String(urlPeriod)) !== -1) pf.value = urlPeriod;
+      filterStudents();
+      show("screen-select");
+    });
+  }).catch(function() { show("screen-error"); });
+}
+
+function filterStudents() {
+  var search = ((document.getElementById("s-search") || {}).value || "").toLowerCase().trim();
+  var period = (document.getElementById("s-period") || {}).value || "all";
+  var sort = (document.getElementById("s-sort") || {}).value || "first";
+  var list = students.filter(function(s) {
+    var mp = period === "all" || String(s.period) === String(period);
+    var mn = !search || String(s.first).toLowerCase().indexOf(search) !== -1 || String(s.last).toLowerCase().indexOf(search) !== -1;
+    return mp && mn;
+  }).slice().sort(function(a, b) {
+    return sort === "last"
+      ? String(a.last).localeCompare(String(b.last)) || String(a.first).localeCompare(String(b.first))
+      : String(a.first).localeCompare(String(b.first)) || String(a.last).localeCompare(String(b.last));
+  });
+  document.getElementById("s-count").textContent = list.length === 0 ? "No students found" : list.length + " student" + (list.length !== 1 ? "s" : "");
+  var letters = Array.from(new Set(list.map(function(s) { return (sort === "last" ? s.last : s.first)[0].toUpperCase(); }))).sort();
+  document.getElementById("s-alpha").innerHTML = letters.map(function(l) {
+    return '<button onclick="jumpTo(\'' + l + '\')" style="min-width:32px;height:32px;padding:0;border-radius:8px;font-size:12px;font-weight:700;background:linear-gradient(145deg,#263060,#1E2340);color:#E8C86A;border:1px solid rgba(201,168,76,0.25);width:auto">' + l + "</button>";
+  }).join("");
+  var el = document.getElementById("s-list");
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">No students found.<br>Try a different search or period.</div>';
+    return;
+  }
+  var lastL = "";
+  el.innerHTML = list.map(function(s) {
+    var key = (sort === "last" ? s.last : s.first)[0].toUpperCase();
+    var hdr = key !== lastL ? (lastL = key, '<div data-letter="' + key + '" style="font-size:11px;font-weight:700;color:var(--gold3);padding:10px 4px 4px;letter-spacing:.1em">' + key + "</div>") : "";
+    return hdr +
+      '<button onclick="selectStudent(\'' + s.id + '\')" style="display:flex;align-items:center;gap:14px;padding:13px 14px;text-align:left;border-radius:12px;width:100%;border:1px solid rgba(30,35,64,0.1);background:#fff;color:#1A1E38">' +
+      avHTML(s.first, s.last, 42) +
+      '<div style="flex:1"><div style="font-weight:600;font-size:15px">' + s.first + " " + s.last + '</div><div style="font-size:12px;color:var(--text2);margin-top:2px">Grade ' + s.grade + " · Period " + s.period + "</div></div>" +
+      '<div style="font-size:16px;color:var(--text3)">›</div></button>';
+  }).join("");
+}
+function jumpTo(letter) {
+  var target = document.querySelector('[data-letter="' + letter + '"]');
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function selectStudent(id) {
+  selectedStudent = students.find(function(s) { return s.id === id; });
+  if (!selectedStudent) return;
+  var av = document.getElementById("v2-avatar");
+  av.style.cssText = avStyle(selectedStudent.first, selectedStudent.last, 54);
+  av.textContent = selectedStudent.first[0] + selectedStudent.last[0];
+  document.getElementById("v2-name").textContent = selectedStudent.first + " " + selectedStudent.last;
+  document.getElementById("v2-sub").textContent = "Grade " + selectedStudent.grade + " · Period " + selectedStudent.period;
+  document.getElementById("v2-code").value = "";
+  document.getElementById("v2-error").classList.add("hidden");
+  show("screen-verify");
+  setTimeout(function() { document.getElementById("v2-code").focus(); }, 200);
+}
+function verifyCode() {
+  var code = document.getElementById("v2-code").value.trim();
+  var err = document.getElementById("v2-error");
+  if (code.toLowerCase() === String(selectedStudent.access_code).toLowerCase()) {
+    err.classList.add("hidden");
+    loadScoreScreen();
+    show("screen-scores");
+  } else {
+    err.textContent = "Incorrect code. Check your sticker and try again.";
+    err.classList.remove("hidden");
+    document.getElementById("v2-code").value = "";
+    document.getElementById("v2-code").focus();
+  }
+}
+function loadScoreScreen() {
+  var s = selectedStudent;
+  var av = document.getElementById("d-avatar");
+  av.style.cssText = avStyle(s.first, s.last, 46);
+  av.textContent = s.first[0] + s.last[0];
+  document.getElementById("d-name").textContent = s.first + " " + s.last;
+  document.getElementById("d-sub").textContent = "Grade " + s.grade + " · Period " + s.period;
+  var week = "Week of " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  document.getElementById("week-label").textContent = week;
+  document.getElementById("score-fields").innerHTML = skills.map(function(sk) {
+    var last = getLastVal(s.id, sk.id);
+    return '<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid rgba(30,35,64,0.08)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<div><div style="font-weight:600;font-size:15px">' + sk.name + '</div>' +
+      '<div style="font-size:12px;color:var(--text2)">' + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + " · " + sk.unit + "</div></div>" +
+      (last !== null ? '<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Last</div><div style="font-size:15px;font-weight:600;color:var(--gold3)">' + last + " " + sk.unit + "</div></div>" : "") +
+      "</div>" +
+      '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="sf-' + sk.id + '" style="font-size:24px;text-align:center;padding:14px"/></div>';
+  }).join("");
+  document.getElementById("my-progress").innerHTML = skills.map(function(sk) {
+    var vals = getVals(s.id, sk.id);
+    var rank = getRank(s.id, sk.id);
+    return '<div class="rank-row"><div style="flex:1"><div style="font-weight:500;font-size:13px">' + sk.name + '</div>' +
+      '<div style="font-size:12px;color:var(--text2)">' + (vals.length ? "Latest: " + vals[vals.length - 1] + " " + sk.unit : "No entries yet") + "</div></div>" +
+      rankBadge(rank, students.length) + "</div>";
+  }).join("") || '<div style="color:var(--text3);font-size:13px;text-align:center">No skills yet.</div>';
+}
+function submitScores() {
+  var btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  var week = document.getElementById("week-label").textContent || ("Week of " + new Date().toLocaleDateString());
+  var rows = skills.filter(function(sk) {
+    var el = document.getElementById("sf-" + sk.id);
+    return el && el.value !== "";
+  }).map(function(sk) {
+    return { student_id: selectedStudent.id, skill_id: sk.id, value: parseFloat(document.getElementById("sf-" + sk.id).value), week_label: week };
+  });
+  if (!rows.length) {
+    document.getElementById("score-alert").innerHTML = '<div class="alert alert-error">Enter at least one score before saving.</div>';
+    btn.disabled = false;
+    btn.textContent = "Save My Scores ✓";
+    return;
+  }
+  sb.from("entries").insert(rows).then(function(r) {
+    if (r.error) {
+      document.getElementById("score-alert").innerHTML = '<div class="alert alert-error">' + r.error.message + "</div>";
+      btn.disabled = false;
+      btn.textContent = "Save My Scores ✓";
+      return;
+    }
+    rows.forEach(function(row) {
+      if (!entries[row.student_id]) entries[row.student_id] = {};
+      if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
+      entries[row.student_id][row.skill_id].push(row.value);
+    });
+    document.getElementById("success-msg").textContent = "Scores saved for " + selectedStudent.first + "! Great work this week.";
+    document.getElementById("success-ranks").innerHTML = skills.map(function(sk) {
+      var rank = getRank(selectedStudent.id, sk.id);
+      var val = getLastVal(selectedStudent.id, sk.id);
+      if (val === null) return "";
+      return '<div class="rank-row"><div style="flex:1;font-weight:500;font-size:14px">' + sk.name + "</div>" + rankBadge(rank, students.length) + "</div>";
+    }).filter(Boolean).join("") || '<div style="color:var(--text3);font-size:13px;text-align:center">Keep logging to see rankings.</div>';
+    show("screen-success");
+    btn.disabled = false;
+    btn.textContent = "Save My Scores ✓";
+  });
+}
+function goBack(screen) {
+  selectedStudent = null;
+  show("screen-" + screen);
+  if (screen === "select") filterStudents();
+}
+
+(function loadSDK() {
+  if (!window.supabase) {
+    document.getElementById("error-msg").textContent = "Could not load the app library. Check your internet connection.";
+    show("screen-error");
+    return;
+  }
+  fetch("/api/config").then(function(r) { return r.json().then(function(cfg) { return { ok: r.ok, cfg: cfg }; }); }).then(function(res) {
+    var cfg = res.cfg || {};
+    if (!res.ok || !cfg.key) {
+      document.getElementById("error-msg").textContent = cfg.error || "Could not load class data.";
+      show("screen-error");
+      return;
+    }
+    sb = window.supabase.createClient(location.origin + "/api/supabase", cfg.key);
+    bootStudent();
+  }).catch(function() {
+    document.getElementById("error-msg").textContent = "Could not reach the server. Try again.";
+    show("screen-error");
+  });
+})();
+</script>
+</body>
+</html>
