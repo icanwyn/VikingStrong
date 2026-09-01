@@ -2264,7 +2264,7 @@ function closeQR() { document.getElementById("qr-modal").classList.add("hidden")
 function genQR() {
   if (!ME) return;
   var period = (document.getElementById("qr-period") || {}).value || "all";
-  currentQRUrl = location.origin.replace(/\/$/, "") + "/student.html?t=" + encodeURIComponent(ME.id) + (period !== "all" ? "&p=" + encodeURIComponent(period) : "");
+  currentQRUrl = location.origin.replace(/\/$/, "") + "/students.html?t=" + encodeURIComponent(ME.id) + (period !== "all" ? "&p=" + encodeURIComponent(period) : "");
   document.getElementById("qr-url").textContent = currentQRUrl;
   var wrap = document.getElementById("qr-wrap");
   wrap.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading QR…</div>';
@@ -3297,7 +3297,7 @@ function closeQR() { document.getElementById("qr-modal").classList.add("hidden")
 function genQR() {
   if (!ME) return;
   var period = (document.getElementById("qr-period") || {}).value || "all";
-  currentQRUrl = location.origin.replace(/\/$/, "") + "/student.html?t=" + encodeURIComponent(ME.id) + (period !== "all" ? "&p=" + encodeURIComponent(period) : "");
+  currentQRUrl = location.origin.replace(/\/$/, "") + "/students.html?t=" + encodeURIComponent(ME.id) + (period !== "all" ? "&p=" + encodeURIComponent(period) : "");
   document.getElementById("qr-url").textContent = currentQRUrl;
   var wrap = document.getElementById("qr-wrap");
   wrap.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading QR…</div>';

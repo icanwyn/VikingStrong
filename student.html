@@ -111,6 +111,12 @@ button.primary{
     <div style="font-size:14px;color:var(--text2)" id="error-msg">This QR code or link is no longer valid. Ask your teacher for a new one.</div>
   </div>
 
+  <div id="screen-classes" class="hidden">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Student Access</div>
+    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px">Choose your class, then find your name</div>
+    <div id="class-list" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+
   <div id="screen-select" class="hidden">
     <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Your Student Page</div>
     <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px">Find your name, enter your code, then log scores and set goals</div>
@@ -259,7 +265,7 @@ function avHTML(f, l, sz) {
   return '<div style="' + avStyle(f, l, sz || 36) + '">' + f[0] + l[0] + "</div>";
 }
 function show(id) {
-  ["screen-loading","screen-error","screen-select","screen-verify","screen-scores","screen-success","screen-board"].forEach(function(s) {
+  ["screen-loading","screen-error","screen-classes","screen-select","screen-verify","screen-scores","screen-success","screen-board"].forEach(function(s) {
     var el = document.getElementById(s);
     if (el) el.classList.add("hidden");
   });
@@ -270,7 +276,7 @@ function show(id) {
   var boardBtn = document.getElementById("board-btn");
   var logBtn = document.getElementById("log-btn");
   if (boardBtn) {
-    boardBtn.classList.toggle("hidden", onBoard || id === "screen-loading" || id === "screen-error");
+    boardBtn.classList.toggle("hidden", onBoard || id === "screen-loading" || id === "screen-error" || id === "screen-classes");
   }
   if (logBtn) logBtn.classList.toggle("hidden", !onBoard);
   if (id !== "screen-board" && id !== "screen-loading" && id !== "screen-error") lastScreen = id;
@@ -389,10 +395,37 @@ function rankBadge(r) {
   return '<span class="badge badge-gray">' + ordinal(r) + "</span>";
 }
 
+function pickClass(id) {
+  location.href = "/students.html?t=" + encodeURIComponent(id);
+}
+function showClassPicker() {
+  document.getElementById("teacher-label").textContent = "Choose your class";
+  document.title = "VikingStrong — Student Access";
+  sb.from("teachers").select("id,name,school").order("name").then(function(r) {
+    var list = (r.data || []).filter(function(t) { return t && t.id; });
+    var el = document.getElementById("class-list");
+    if (!el) { show("screen-error"); return; }
+    if (!list.length) {
+      el.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">No classes yet. Ask your teacher for a QR code.</div>';
+      show("screen-classes");
+      return;
+    }
+    el.innerHTML = list.map(function(t) {
+      var label = (t.name || "PE Class") + (t.school ? " · " + t.school : "");
+      return '<button onclick="pickClass(\'' + t.id + '\')" style="display:flex;align-items:center;gap:12px;padding:14px;text-align:left;border-radius:12px;width:100%;border:1px solid rgba(30,35,64,0.1);background:#fff;color:#1A1E38">' +
+        '<div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(145deg,#C4973F,#8B6A30);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏆</div>' +
+        '<div style="flex:1;font-weight:600;font-size:15px">' + label + '</div>' +
+        '<div style="font-size:16px;color:var(--text3)">›</div></button>';
+    }).join("");
+    show("screen-classes");
+  }).catch(function() {
+    document.getElementById("error-msg").textContent = "Could not load classes. Try again.";
+    show("screen-error");
+  });
+}
 function bootStudent() {
   if (!teacherId) {
-    document.getElementById("error-msg").textContent = "No teacher ID in URL. Scan your teacher's QR code.";
-    show("screen-error");
+    showClassPicker();
     return;
   }
   sb.from("teachers").select("*").eq("id", teacherId).single().then(function(tr) {

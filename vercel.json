@@ -4,6 +4,8 @@
       "source": "/api/supabase/:path*",
       "destination": "https://jhklcmxtvrinfntjwhaw.supabase.co/:path*"
     },
-    { "source": "/student", "destination": "/student.html" }
+    { "source": "/student", "destination": "/student.html" },
+    { "source": "/students", "destination": "/student.html" },
+    { "source": "/students.html", "destination": "/student.html" }
   ]
 }
