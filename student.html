@@ -73,6 +73,19 @@ button.primary{
 .step.done .step-dot{border-color:var(--gold);background:var(--gold);color:#1A1E38}
 .step-line{width:32px;height:1px;background:rgba(30,35,64,0.15)}
 .rank-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F0F1F4;border-radius:10px;margin-bottom:8px}
+.top-btn{
+  width:auto;margin-left:auto;padding:7px 12px;font-size:12px;font-weight:700;
+  background:linear-gradient(135deg,#E8C86A,#C9A84C);color:#1A1E38;border:0;
+}
+.top-btn:hover{background:linear-gradient(135deg,#F0D870,#C9A84C);color:#1A1E38}
+#wrap.wide{max-width:720px}
+.board-table{width:100%;border-collapse:collapse}
+.board-table th{text-align:left;font-size:11px;color:var(--text3);padding:8px 6px;border-bottom:1px solid rgba(30,35,64,0.1);text-transform:uppercase;letter-spacing:.04em}
+.board-table td{padding:10px 6px;border-bottom:1px solid rgba(30,35,64,0.06);font-size:14px;vertical-align:middle}
+.podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;margin-bottom:1.25rem}
+.pod-col{display:flex;flex-direction:column;align-items:center;flex:1;max-width:140px}
+.me-row td{background:rgba(201,168,76,0.14)}
+.ghost{background:none;border:1px solid rgba(30,35,64,0.15);color:var(--text2);width:auto;padding:8px 14px;font-size:13px}
 </style>
 </head>
 <body>
@@ -82,6 +95,8 @@ button.primary{
     <div style="font-family:'Cormorant Garamond',serif;font-weight:700;font-size:16px;letter-spacing:.08em;color:#E8C86A">VIKINGSTRONG</div>
     <div id="teacher-label" style="font-size:11px;color:rgba(240,237,232,0.55)">Loading…</div>
   </div>
+  <button id="board-btn" class="top-btn hidden" onclick="openBoard()">🏆 Board</button>
+  <button id="log-btn" class="top-btn hidden" onclick="backFromBoard()" style="background:#fff;color:#1A1E38">📋 Log scores</button>
 </div>
 <div id="wrap">
   <div id="screen-loading"><div class="spinner"></div></div>
@@ -115,6 +130,7 @@ button.primary{
     <div id="s-alpha" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
     <div id="s-count" style="font-size:12px;color:var(--text3);margin-bottom:10px"></div>
     <div id="s-list" style="display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow-y:auto"></div>
+    <button class="ghost" onclick="openBoard()" style="width:100%;margin-top:14px">🏆 View class board</button>
   </div>
 
   <div id="screen-verify" class="hidden">
@@ -171,6 +187,7 @@ button.primary{
       <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📈 My Progress</div>
       <div id="my-progress"></div>
     </div>
+    <button class="ghost" onclick="openBoard()" style="width:100%;margin-top:14px">🏆 View class board</button>
   </div>
 
   <div id="screen-success" class="hidden" style="text-align:center;padding:2rem 0">
@@ -181,16 +198,37 @@ button.primary{
       <div style="font-size:12px;font-weight:600;color:var(--gold3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Your Rankings</div>
       <div id="success-ranks"></div>
     </div>
+    <button class="primary" onclick="openBoard()" style="margin-bottom:10px">🏆 See the class board</button>
     <button onclick="goBack('select')" style="background:none;color:var(--text2);width:auto;padding:8px 20px;font-size:13px">Done — Switch Student</button>
+  </div>
+
+  <div id="screen-board" class="hidden">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Class Board</div>
+    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px">Latest score for each student</div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <select id="lb-skill" onchange="renderBoard()" style="flex:1;min-width:140px"></select>
+      <select id="lb-period" onchange="renderBoard()" style="flex:1;min-width:120px"><option value="all">All Periods</option></select>
+    </div>
+    <div id="lb-tag" style="text-align:center;margin-bottom:12px"></div>
+    <div id="lb-podium" class="podium"></div>
+    <div class="card" style="padding:0;overflow:auto">
+      <table class="board-table">
+        <thead><tr><th>Rank</th><th>Student</th><th>Period</th><th>Score</th><th>Change</th></tr></thead>
+        <tbody id="lb-body"></tbody>
+      </table>
+    </div>
+    <button class="ghost" onclick="backFromBoard()" style="width:100%;margin-top:14px">← Back to log scores</button>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 var teacherId = null, teacherInfo = null, students = [], skills = [], entries = {}, selectedStudent = null, sb = null;
+var lastScreen = "screen-select";
 var params = new URLSearchParams(location.search);
 teacherId = params.get("t");
 var urlPeriod = params.get("p");
+var wantBoard = params.get("board") === "1" || params.get("view") === "board";
 
 var AB = ["#1E2340","#263060","#2E3858","#8090A8","#C9A84C","#1A1E38"];
 var AT = ["#E8C86A","#F0EDE8","#E8C86A","#F0EDE8","#1A1E38","#E8C86A"];
@@ -202,10 +240,21 @@ function avHTML(f, l, sz) {
   return '<div style="' + avStyle(f, l, sz || 36) + '">' + f[0] + l[0] + "</div>";
 }
 function show(id) {
-  ["screen-loading","screen-error","screen-select","screen-verify","screen-scores","screen-success"].forEach(function(s) {
-    document.getElementById(s).classList.add("hidden");
+  ["screen-loading","screen-error","screen-select","screen-verify","screen-scores","screen-success","screen-board"].forEach(function(s) {
+    var el = document.getElementById(s);
+    if (el) el.classList.add("hidden");
   });
   document.getElementById(id).classList.remove("hidden");
+  var wrap = document.getElementById("wrap");
+  if (wrap) wrap.classList.toggle("wide", id === "screen-board");
+  var onBoard = id === "screen-board";
+  var boardBtn = document.getElementById("board-btn");
+  var logBtn = document.getElementById("log-btn");
+  if (boardBtn) {
+    boardBtn.classList.toggle("hidden", onBoard || id === "screen-loading" || id === "screen-error");
+  }
+  if (logBtn) logBtn.classList.toggle("hidden", !onBoard);
+  if (id !== "screen-board" && id !== "screen-loading" && id !== "screen-error") lastScreen = id;
 }
 function getVals(sid, skid) { return (entries[sid] && entries[sid][skid]) || []; }
 function getLastVal(sid, skid) { var v = getVals(sid, skid); return v.length ? v[v.length - 1] : null; }
@@ -287,9 +336,17 @@ function showTimeHint(input, skid) {
     hint.textContent = "This will save as " + formatTimeValue(p.value, sk) + "  (" + m + " min " + s + " sec)";
   }
 }
-function getRanked(skid) {
+function getImp(sid, skid) {
+  var v = getVals(sid, skid);
+  if (v.length < 2) return null;
   var sk = skills.find(function(s) { return s.id === skid; });
-  return students.map(function(s) { return { id: s.id, val: getLastVal(s.id, skid) }; })
+  var d = v[v.length - 1] - v[0];
+  return { pct: (Math.abs(d) / Math.abs(v[0]) * 100).toFixed(1), ok: sk && sk.lower_better ? d < 0 : d > 0 };
+}
+function getRanked(skid, period) {
+  var sk = skills.find(function(s) { return s.id === skid; });
+  var list = (!period || period === "all") ? students : students.filter(function(s) { return String(s.period) === String(period); });
+  return list.map(function(s) { return Object.assign({}, s, { val: getLastVal(s.id, skid) }); })
     .filter(function(s) { return s.val !== null; })
     .sort(function(a, b) { return sk && sk.lower_better ? a.val - b.val : b.val - a.val; });
 }
@@ -325,6 +382,7 @@ function bootStudent() {
     students = (res[0] && res[0].data) || [];
     skills = (res[1] && res[1].data) || [];
     if (!students.length) {
+      fillBoardFilters();
       filterStudents();
       show("screen-select");
       return;
@@ -345,10 +403,85 @@ function bootStudent() {
         pf.appendChild(o);
       });
       if (urlPeriod && periods.map(String).indexOf(String(urlPeriod)) !== -1) pf.value = urlPeriod;
-      filterStudents();
-      show("screen-select");
+      fillBoardFilters();
+      var boardBtn = document.getElementById("board-btn");
+      if (boardBtn) boardBtn.classList.remove("hidden");
+      if (wantBoard) openBoard();
+      else { filterStudents(); show("screen-select"); }
     });
   }).catch(function() { show("screen-error"); });
+}
+
+function fillBoardFilters() {
+  var skSel = document.getElementById("lb-skill");
+  var pSel = document.getElementById("lb-period");
+  var curSk = skSel && skSel.value;
+  var curP = pSel && pSel.value;
+  if (skSel) {
+    skSel.innerHTML = skills.map(function(sk) {
+      return '<option value="' + sk.id + '">' + sk.name + "</option>";
+    }).join("");
+    if (curSk) skSel.value = curSk;
+  }
+  if (pSel) {
+    var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
+    pSel.innerHTML = '<option value="all">All Periods</option>' +
+      periods.map(function(p) { return '<option value="' + p + '">Period ' + p + "</option>"; }).join("");
+    if (curP) pSel.value = curP;
+    else if (urlPeriod && periods.map(String).indexOf(String(urlPeriod)) !== -1) pSel.value = urlPeriod;
+  }
+}
+function openBoard() {
+  fillBoardFilters();
+  renderBoard();
+  show("screen-board");
+}
+function backFromBoard() {
+  if (lastScreen === "screen-board") lastScreen = "screen-select";
+  if (lastScreen === "screen-select") filterStudents();
+  if (lastScreen === "screen-scores" && selectedStudent) loadScoreScreen();
+  show(lastScreen || "screen-select");
+}
+function renderBoard() {
+  var skid = (document.getElementById("lb-skill") || {}).value;
+  var period = (document.getElementById("lb-period") || {}).value || "all";
+  var sk = skills.find(function(s) { return s.id === skid; });
+  var ranked = getRanked(skid, period);
+  var tag = document.getElementById("lb-tag");
+  if (tag && sk) tag.innerHTML = '<span class="badge ' + (sk.lower_better ? "badge-gray" : "badge-gold") + '">' + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + "</span>";
+  var podium = document.getElementById("lb-podium");
+  if (ranked.length >= 1) {
+    var order = [ranked[1], ranked[0], ranked[2]];
+    var hts = [70, 100, 52], rnks = [2, 1, 3], lbls = ["2nd", "1st", "3rd"];
+    podium.innerHTML = order.map(function(s, i) {
+      if (!s) return '<div class="pod-col"></div>';
+      var r = rnks[i];
+      return '<div class="pod-col">' + avHTML(s.first, s.last, r === 1 ? 48 : 36) +
+        '<div style="font-weight:700;font-size:' + (r === 1 ? 15 : 13) + 'px;margin:6px 0 2px">' + s.first + "</div>" +
+        '<div style="font-size:12px;color:var(--text2);margin-bottom:6px">' + formatScore(s.val, sk) + "</div>" +
+        '<span class="badge badge-gold">' + lbls[i] + "</span>" +
+        '<div style="margin-top:8px;width:100%;height:' + hts[i] + "px;border-radius:10px 10px 0 0;background:" + (r === 1 ? "rgba(201,168,76,0.35)" : "#E8E8EC") + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:' + (r === 1 ? 22 : 16) + "px;color:" + (r === 1 ? "#8B6A30" : "var(--text2)") + '">#' + r + "</div></div>";
+    }).join("");
+  } else {
+    podium.innerHTML = "";
+  }
+  var body = document.getElementById("lb-body");
+  var me = selectedStudent && selectedStudent.id;
+  if (!ranked.length) {
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:2rem">No scores yet.</td></tr>';
+    return;
+  }
+  body.innerHTML = ranked.map(function(s, i) {
+    var imp = getImp(s.id, skid);
+    var mine = me && s.id === me;
+    return '<tr class="' + (mine ? "me-row" : "") + '">' +
+      "<td>" + rankBadge(i + 1, ranked.length) + "</td>" +
+      '<td><div style="display:flex;align-items:center;gap:10px">' + avHTML(s.first, s.last, 28) +
+      '<span style="font-weight:' + (i < 3 || mine ? 700 : 500) + '">' + s.first + " " + s.last + (mine ? ' <span class="badge badge-gold">You</span>' : "") + "</span></div></td>" +
+      '<td style="color:var(--text2)">P' + s.period + "</td>" +
+      '<td style="font-weight:600">' + formatScore(s.val, sk) + "</td>" +
+      "<td>" + (imp ? '<span style="color:' + (imp.ok ? "var(--gold3)" : "var(--red)") + ';font-size:12px">' + (imp.ok ? "▲" : "▼") + " " + imp.pct + "%</span>" : "—") + "</td></tr>";
+  }).join("");
 }
 
 function filterStudents() {
