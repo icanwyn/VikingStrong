@@ -86,6 +86,10 @@ button.primary{
 .pod-col{display:flex;flex-direction:column;align-items:center;flex:1;max-width:140px}
 .me-row td{background:rgba(201,168,76,0.14)}
 .ghost{background:none;border:1px solid rgba(30,35,64,0.15);color:var(--text2);width:auto;padding:8px 14px;font-size:13px}
+.stabs{display:flex;gap:4px;background:rgba(30,35,64,0.08);padding:4px;border-radius:12px;margin-bottom:14px}
+.stab{flex:1;padding:8px 6px;border:none;background:transparent;color:var(--text2);font-size:12px;font-weight:600;border-radius:9px;box-shadow:none}
+.stab:hover{background:rgba(30,35,64,0.08);color:var(--text);transform:none}
+.stab.on{background:#1E2340;color:#E8C86A}
 </style>
 </head>
 <body>
@@ -108,8 +112,8 @@ button.primary{
   </div>
 
   <div id="screen-select" class="hidden">
-    <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Log Your Scores</div>
-    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px">Find your name and enter your code</div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Your Student Page</div>
+    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px">Find your name, enter your code, then log scores and set goals</div>
     <div class="steps">
       <div class="step active"><div class="step-dot">1</div><span>Name</span></div>
       <div class="step-line"></div>
@@ -159,14 +163,7 @@ button.primary{
   </div>
 
   <div id="screen-scores" class="hidden">
-    <div class="steps">
-      <div class="step done"><div class="step-dot">✓</div><span>Name</span></div>
-      <div class="step-line"></div>
-      <div class="step done"><div class="step-dot">✓</div><span>Verify</span></div>
-      <div class="step-line"></div>
-      <div class="step active"><div class="step-dot">3</div><span>Scores</span></div>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1.25rem">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">
       <div id="d-avatar" style="width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700"></div>
       <div style="flex:1">
         <div id="d-name" style="font-weight:600;font-size:16px"></div>
@@ -174,20 +171,41 @@ button.primary{
       </div>
       <button onclick="goBack('select')" style="width:auto;padding:6px 12px;font-size:12px;background:none;color:var(--text2)">Switch</button>
     </div>
-    <div style="text-align:center;margin-bottom:16px">
-      <span id="week-label" style="font-size:12px;color:var(--text3);background:#fff;padding:4px 14px;border-radius:99px;border:1px solid rgba(30,35,64,0.12)"></span>
+    <div class="stabs">
+      <button class="stab on" id="stab-log" onclick="goStuTab('log')">📋 Scores</button>
+      <button class="stab" id="stab-goals" onclick="goStuTab('goals')">🎯 Goals</button>
+      <button class="stab" id="stab-board" onclick="openBoard()">🏆 Board</button>
     </div>
-    <div class="card" style="margin-bottom:14px">
-      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📋 This Week's Scores</div>
-      <div id="score-fields"></div>
-      <div id="score-alert" style="margin-top:10px"></div>
-      <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save My Scores ✓</button>
+
+    <div id="pane-log">
+      <div style="text-align:center;margin-bottom:16px">
+        <span id="week-label" style="font-size:12px;color:var(--text3);background:#fff;padding:4px 14px;border-radius:99px;border:1px solid rgba(30,35,64,0.12)"></span>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📋 This Week's Scores</div>
+        <div id="score-fields"></div>
+        <div id="score-alert" style="margin-top:10px"></div>
+        <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save My Scores ✓</button>
+      </div>
+      <div class="card">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📈 My Progress</div>
+        <div id="my-progress"></div>
+      </div>
     </div>
-    <div class="card">
-      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📈 My Progress</div>
-      <div id="my-progress"></div>
+
+    <div id="pane-goals" class="hidden">
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:6px">🎯 My Goals</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Set a target for each skill. Times: 1.4 = seconds, 1:04 = 1 min 4 sec.</div>
+        <div id="stu-goals-fields"></div>
+        <button class="primary" onclick="saveStuGoals()" style="margin-top:8px">Save Goals</button>
+        <div id="stu-goals-ok" class="hidden alert alert-success" style="margin-top:10px">✓ Goals saved!</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:700;font-size:14px;margin-bottom:12px">Goal progress</div>
+        <div id="stu-goals-progress"></div>
+      </div>
     </div>
-    <button class="ghost" onclick="openBoard()" style="width:100%;margin-top:14px">🏆 View class board</button>
   </div>
 
   <div id="screen-success" class="hidden" style="text-align:center;padding:2rem 0">
@@ -198,7 +216,8 @@ button.primary{
       <div style="font-size:12px;font-weight:600;color:var(--gold3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Your Rankings</div>
       <div id="success-ranks"></div>
     </div>
-    <button class="primary" onclick="openBoard()" style="margin-bottom:10px">🏆 See the class board</button>
+    <button class="primary" onclick="openMyPage()" style="margin-bottom:10px">🎯 My page — scores & goals</button>
+    <button class="ghost" onclick="openBoard()" style="width:100%;margin-bottom:10px">🏆 See the class board</button>
     <button onclick="goBack('select')" style="background:none;color:var(--text2);width:auto;padding:8px 20px;font-size:13px">Done — Switch Student</button>
   </div>
 
@@ -437,10 +456,103 @@ function openBoard() {
   show("screen-board");
 }
 function backFromBoard() {
+  if (selectedStudent) { openMyPage(); return; }
   if (lastScreen === "screen-board") lastScreen = "screen-select";
   if (lastScreen === "screen-select") filterStudents();
-  if (lastScreen === "screen-scores" && selectedStudent) loadScoreScreen();
   show(lastScreen || "screen-select");
+}
+function goStuTab(t) {
+  var log = document.getElementById("pane-log");
+  var goals = document.getElementById("pane-goals");
+  if (log) log.classList.toggle("hidden", t !== "log");
+  if (goals) goals.classList.toggle("hidden", t !== "goals");
+  var blog = document.getElementById("stab-log");
+  var bgoals = document.getElementById("stab-goals");
+  if (blog) blog.classList.toggle("on", t === "log");
+  if (bgoals) bgoals.classList.toggle("on", t === "goals");
+  if (t === "goals") renderStuGoals();
+}
+function openMyPage() {
+  loadScoreScreen();
+  goStuTab("log");
+  show("screen-scores");
+}
+function getStuGoals() {
+  var g = selectedStudent && selectedStudent.goals;
+  if (!g) return {};
+  if (typeof g === "string") {
+    try { g = JSON.parse(g); } catch (e) { return {}; }
+  }
+  return g && typeof g === "object" ? g : {};
+}
+function renderStuGoals() {
+  var s = selectedStudent;
+  if (!s) return;
+  var goals = getStuGoals();
+  var fields = document.getElementById("stu-goals-fields");
+  if (fields) {
+    fields.innerHTML = skills.map(function(sk) {
+      var last = getLastVal(s.id, sk.id);
+      var bestVals = getVals(s.id, sk.id);
+      var best = bestVals.length ? (sk.lower_better ? Math.min.apply(null, bestVals) : Math.max.apply(null, bestVals)) : null;
+      return '<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid rgba(30,35,64,0.08)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+        '<div><div style="font-weight:600;font-size:14px">' + sk.name + "</div>" +
+        '<div style="font-size:11px;color:var(--text3)">' + (isTimeSkill(sk) ? "sec or mm:ss" : sk.unit) + " · " + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + "</div></div>" +
+        '<div style="text-align:right;font-size:11px;color:var(--text2)">' +
+        (last !== null ? "Current: <strong>" + formatScore(last, sk) + "</strong><br>" : "") +
+        (best !== null ? 'Best: <strong style="color:var(--gold3)">' + formatScore(best, sk) + "</strong>" : "") +
+        "</div></div>" +
+        (isTimeSkill(sk)
+          ? '<input type="text" inputmode="decimal" autocomplete="off" id="sg-' + sk.id + '" placeholder="1.4 or 1:04" value="' + (goals[sk.id] != null ? formatTimeValue(goals[sk.id], sk) : "") + '" style="font-size:16px;text-align:center;padding:10px"/>'
+          : '<input type="number" step="0.1" inputmode="decimal" id="sg-' + sk.id + '" placeholder="Set your ' + sk.name + ' goal…" value="' + (goals[sk.id] != null ? goals[sk.id] : "") + '" style="font-size:16px;text-align:center;padding:10px"/>') +
+        "</div>";
+    }).join("");
+  }
+  var prog = document.getElementById("stu-goals-progress");
+  if (!prog) return;
+  var keys = Object.keys(goals);
+  if (!keys.length) {
+    prog.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">Set your goals above and track them here.</div>';
+    return;
+  }
+  prog.innerHTML = skills.map(function(sk) {
+    var goal = goals[sk.id];
+    if (goal == null || goal === "") return "";
+    var last = getLastVal(s.id, sk.id);
+    var achieved = last !== null && (sk.lower_better ? last <= goal : last >= goal);
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(30,35,64,0.08)">' +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:600">' + sk.name + "</div>" +
+      '<div style="font-size:12px;color:var(--text2)">' + (last !== null ? "Current: " + formatScore(last, sk) : "No scores yet") +
+      ' → Goal: <strong style="color:var(--gold3)">' + formatScore(goal, sk) + "</strong></div></div>" +
+      '<span class="badge ' + (achieved ? "badge-gold" : "badge-gray") + '">' + (achieved ? "✓ Done" : "In progress") + "</span></div>";
+  }).filter(Boolean).join("") || '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">Set your goals above and track them here.</div>';
+}
+function saveStuGoals() {
+  if (!selectedStudent) return;
+  var goals = {};
+  skills.forEach(function(sk) {
+    var el = document.getElementById("sg-" + sk.id);
+    if (!el || !String(el.value).trim()) return;
+    var p = parseTimeInput(el.value, sk);
+    if (p.ok) goals[sk.id] = p.value;
+  });
+  var ok = document.getElementById("stu-goals-ok");
+  var btn = document.querySelector("#pane-goals button.primary");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+  sb.from("students").update({ goals: goals }).eq("id", selectedStudent.id).then(function(r) {
+    if (btn) { btn.disabled = false; btn.textContent = "Save Goals"; }
+    if (r.error) {
+      if (ok) { ok.classList.remove("hidden"); ok.className = "alert alert-error"; ok.style.marginTop = "10px"; ok.textContent = r.error.message; }
+      return;
+    }
+    selectedStudent.goals = goals;
+    var i = students.findIndex(function(s) { return s.id === selectedStudent.id; });
+    if (i > -1) students[i].goals = goals;
+    if (ok) { ok.classList.remove("hidden"); ok.className = "alert alert-success"; ok.style.marginTop = "10px"; ok.textContent = "✓ Goals saved!"; }
+    renderStuGoals();
+    setTimeout(function() { if (ok) ok.classList.add("hidden"); }, 3000);
+  });
 }
 function renderBoard() {
   var skid = (document.getElementById("lb-skill") || {}).value;
@@ -540,8 +652,7 @@ function verifyCode() {
   var err = document.getElementById("v2-error");
   if (code.toLowerCase() === String(selectedStudent.access_code).toLowerCase()) {
     err.classList.add("hidden");
-    loadScoreScreen();
-    show("screen-scores");
+    openMyPage();
   } else {
     err.textContent = "Incorrect code. Check your sticker and try again.";
     err.classList.remove("hidden");
