@@ -223,7 +223,7 @@ button.primary{
 
   <div id="screen-board" class="hidden">
     <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Class Board</div>
-    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px">Latest score for each student</div>
+    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px">Top 10 latest scores</div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <select id="lb-skill" onchange="renderBoard()" style="flex:1;min-width:140px"></select>
       <select id="lb-period" onchange="renderBoard()" style="flex:1;min-width:120px"><option value="all">All Periods</option></select>
@@ -558,7 +558,8 @@ function renderBoard() {
   var skid = (document.getElementById("lb-skill") || {}).value;
   var period = (document.getElementById("lb-period") || {}).value || "all";
   var sk = skills.find(function(s) { return s.id === skid; });
-  var ranked = getRanked(skid, period);
+  var rankedAll = getRanked(skid, period);
+  var ranked = rankedAll.slice(0, 10);
   var tag = document.getElementById("lb-tag");
   if (tag && sk) tag.innerHTML = '<span class="badge ' + (sk.lower_better ? "badge-gray" : "badge-gold") + '">' + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + "</span>";
   var podium = document.getElementById("lb-podium");
@@ -587,7 +588,7 @@ function renderBoard() {
     var imp = getImp(s.id, skid);
     var mine = me && s.id === me;
     return '<tr class="' + (mine ? "me-row" : "") + '">' +
-      "<td>" + rankBadge(i + 1, ranked.length) + "</td>" +
+      "<td>" + rankBadge(i + 1, 10) + "</td>" +
       '<td><div style="display:flex;align-items:center;gap:10px">' + avHTML(s.first, s.last, 28) +
       '<span style="font-weight:' + (i < 3 || mine ? 700 : 500) + '">' + s.first + " " + s.last + (mine ? ' <span class="badge badge-gold">You</span>' : "") + "</span></div></td>" +
       '<td style="color:var(--text2)">P' + s.period + "</td>" +
