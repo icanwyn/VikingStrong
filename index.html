@@ -375,6 +375,14 @@ tr:hover td{background:rgba(255,255,255,0.03)}
   color: #1A1E38 !important;
   -webkit-text-fill-color: #1A1E38 !important;
 }
+.sp-edit-input {
+  color: #1A1E38 !important;
+  background: #FFFFFF !important;
+  -webkit-text-fill-color: #1A1E38 !important;
+  caret-color: #1A1E38;
+  color-scheme: light;
+  border: 1px solid rgba(201,168,76,0.45) !important;
+}
 #login-page input::placeholder {
   color: rgba(26,30,56,0.38) !important;
   -webkit-text-fill-color: rgba(26,30,56,0.38) !important;
@@ -514,6 +522,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
             <option value="all">All Periods</option>
           </select>
           <span id="roster-count" style="font-size:13px;color:var(--text2)"></span>
+          <span style="font-size:12px;color:var(--text3)">Click a name to view and edit scores</span>
           <button onclick="resetPeriodCodes(event)" style="margin-left:auto;font-size:12px;padding:5px 12px;color:var(--gold);background:var(--gold-glow);border-color:rgba(201,168,76,.3)">↻ Reset Period Codes</button>
         </div>
         <div style="overflow-x:auto">
@@ -968,6 +977,9 @@ tr:hover td{background:rgba(255,255,255,0.03)}
         </div>
         <div id="sp-goals" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
       </div>
+      <div class="card" style="margin-bottom:1.25rem;border-color:rgba(201,168,76,.25)">
+        <div id="sp-entries"></div>
+      </div>
       <div id="sp-charts"></div>
     </div>
   </div>
@@ -1016,6 +1028,7 @@ var adminUsers = [], skLowerBetter = false, isSignup = false;
 var studentGoals = {}, mergedStudents = [];
 var sharingWith = [], sharedWithMe = [];
 var currentQRUrl = "";
+var spStudentId = null;
 
 // ── Code gen ─────────────────────────────────────────────────
 var ANIMALS = ["Fox","Bear","Wolf","Hawk","Lion","Deer","Owl","Panda","Tiger","Eagle","Lynx","Shark"];
@@ -1133,6 +1146,18 @@ function formatScore(value, sk) {
   if (!isTimeSkill(sk)) return formatTimeValue(value, sk) + (sk && sk.unit ? " " + sk.unit : "");
   var sec = timeUnitKind(sk) === "min" ? Number(value) * 60 : Number(value);
   return sec < 60 ? formatTimeValue(value, sk) + " sec" : formatTimeValue(value, sk);
+}
+function timeMeaning(raw, sk) {
+  var p = parseTimeInput(raw, sk);
+  if (p.empty) return "Type a score";
+  if (!p.ok) return p.error || "Invalid";
+  if (!isTimeSkill(sk)) return "Saves as " + formatScore(p.value, sk);
+  var sec = timeUnitKind(sk) === "min" ? p.value * 60 : p.value;
+  var typed = String(raw).indexOf(":") >= 0;
+  if (sec < 60) return "Saves as " + formatTimeValue(p.value, sk) + " seconds  (not mm:ss)";
+  var m = Math.floor(sec / 60);
+  var s = Math.round((sec - m * 60) * 10) / 10;
+  return "Saves as " + formatTimeValue(p.value, sk) + "  (" + m + " min " + s + " sec)" + (typed ? "" : "");
 }
 function scoreFieldAttrs(sk) {
   if (isTimeSkill(sk)) return 'type="text" inputmode="decimal" placeholder="sec or mm:ss" autocomplete="off"';
@@ -2412,7 +2437,7 @@ function openSP(id) {
           var h = Math.max(4, Math.round(((sk.lower_better ? mx - v : v - mn) / rng) * 56));
           var isLast = i === vals.length - 1;
           var col = isLast ? "var(--gold)" : (i > 0 && (sk.lower_better ? v < vals[i-1] : v > vals[i-1]) ? "rgba(201,168,76,.5)" : "var(--surface3)");
-          return '<div style="display:flex;flex-direction:column;align-items:center;flex:1"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">' + v + '</div><div style="width:100%;height:' + h + 'px;background:' + col + ';border-radius:3px 3px 0 0"></div></div>';
+          return '<div style="display:flex;flex-direction:column;align-items:center;flex:1"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">' + formatTimeValue(v, sk) + '</div><div style="width:100%;height:' + h + 'px;background:' + col + ';border-radius:3px 3px 0 0"></div></div>';
         }).join("") +
         (goal ? '<div style="position:absolute;left:0;right:0;height:1px;background:rgba(201,168,76,.6);bottom:' + Math.round(((sk.lower_better?mx-goal:goal-mn)/rng)*56) + 'px"><span style="position:absolute;right:0;top:-14px;font-size:9px;color:var(--gold)">🎯' + goal + '</span></div>' : "") +
         '</div>' +
@@ -2430,14 +2455,14 @@ function openSP(id) {
         : '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">No entries yet for this skill</div>') +
       '</div>';
   }).join(""));
+  spStudentId = s.id;
+  renderSpEntries(s.id);
   document.getElementById("sp-modal").classList.remove("hidden");
 }
-function closeSP() { document.getElementById("sp-modal").classList.add("hidden"); }
+function closeSP() { document.getElementById("sp-modal").classList.add("hidden"); spStudentId = null; }
 function saveGoals() {
-  var sid = null;
-  // Find active student in profile modal
-  var spName = document.getElementById("sp-name").textContent;
-  var s = students.find(function(x) { return (x.first + " " + x.last) === spName; });
+  var s = (spStudentId && (students.find(function(x) { return x.id === spStudentId; }) || allStudents().find(function(x) { return x.id === spStudentId; })))
+    || students.find(function(x) { return (x.first + " " + x.last) === document.getElementById("sp-name").textContent; });
   if (!s) return;
   var goals = {};
   skills.forEach(function(sk) {
@@ -2447,7 +2472,116 @@ function saveGoals() {
     if (gp.ok) goals[sk.id] = gp.value;
   });
   studentGoals[s.id] = goals;
-  openSP(s.id);
+  sb.from("students").update({ goals: goals }).eq("id", s.id).then(function() { openSP(s.id); });
+}
+
+function applyLocalEntryUpdate(studentId, skid, entryId, newValue) {
+  var raw = entries[studentId] && entries[studentId][skid];
+  if (!raw) return;
+  var idx = raw.findIndex(function(e) { return e && e.id === entryId; });
+  if (idx > -1) {
+    if (typeof raw[idx] === "object") raw[idx].value = newValue;
+    else raw[idx] = newValue;
+  }
+}
+function applyLocalEntryDelete(studentId, skid, entryId) {
+  var raw = entries[studentId] && entries[studentId][skid];
+  if (!raw) return;
+  var idx = raw.findIndex(function(e) { return e && e.id === entryId; });
+  if (idx > -1) raw.splice(idx, 1);
+}
+
+function renderSpEntries(studentId) {
+  var el = document.getElementById("sp-entries");
+  if (!el) return;
+  var s = students.find(function(x) { return x.id === studentId; }) || allStudents().find(function(x) { return x.id === studentId; });
+  if (!s) { el.innerHTML = ""; return; }
+  var html = '<div class="row" style="margin-bottom:8px">' +
+    '<div style="font-family:\'Cormorant Garamond\',serif;font-size:16px;font-weight:700;color:var(--gold)">✏️ Edit scores</div>' +
+    '</div>' +
+    '<div id="sp-edit-alert"></div>' +
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">' +
+      'Fix a student mistake here. For times, a decimal is seconds and a colon is minutes:seconds — ' +
+      '<strong style="color:var(--gold2)">1.4</strong> = 1.4 seconds, ' +
+      '<strong style="color:var(--gold2)">1:04</strong> (or 1:4) = 1 minute 4 seconds.' +
+    '</div>';
+  var any = false;
+  skills.forEach(function(sk) {
+    var list = getEntries(s.id, sk.id) || [];
+    if (!list.length) return;
+    any = true;
+    html += '<div style="margin-bottom:16px">' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:8px">' + sk.name +
+      ' <span style="font-weight:400;color:var(--text-muted);font-size:11px">' + (isTimeSkill(sk) ? "sec or mm:ss" : sk.unit) + "</span></div>";
+    list.forEach(function(e, i) {
+      var val = typeof e === "object" ? e.value : e;
+      var eid = typeof e === "object" ? e.id : "";
+      var week = (typeof e === "object" && e.week_label) ? e.week_label : ("Entry " + (i + 1));
+      var inputId = "sp-in-" + i + "-" + sk.id;
+      var prevId = "sp-prev-" + i + "-" + sk.id;
+      var shown = formatTimeValue(val, sk);
+      html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
+        '<div style="font-size:11px;color:var(--text-muted);min-width:120px">' + week + "</div>" +
+        '<input class="sp-edit-input" id="' + inputId + '" value="' + String(shown).replace(/"/g, "&quot;") + '" ' +
+          (isTimeSkill(sk)
+            ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"'
+            : 'type="number" step="0.1"') +
+          ' oninput="teacherPreview(\'' + inputId + '\',\'' + prevId + '\',\'' + sk.id + '\')"' +
+          ' style="width:118px;text-align:center;font-size:16px;font-weight:700;padding:8px 10px"/>' +
+        '<div id="' + prevId + '" style="font-size:12px;color:var(--gold2);flex:1;min-width:160px">' + timeMeaning(shown, sk) + "</div>" +
+        (eid
+          ? '<button class="gold" style="width:auto;font-size:12px;padding:6px 12px" onclick="teacherSaveEntry(\'' + s.id + '\',\'' + eid + '\',\'' + sk.id + '\',\'' + inputId + '\')">Save</button>' +
+            '<button style="width:auto;font-size:12px;padding:6px 10px;color:#F0A090;background:rgba(192,57,43,0.18);border-color:transparent" onclick="teacherDeleteEntry(\'' + s.id + '\',\'' + eid + '\',\'' + sk.id + '\')">Delete</button>'
+          : '<span style="font-size:11px;color:var(--text-muted)">Reload to edit</span>') +
+      "</div>";
+    });
+    html += "</div>";
+  });
+  if (!any) html += '<div style="font-size:13px;color:var(--text-muted);padding:6px 0">No scores yet for this student.</div>';
+  el.innerHTML = html;
+}
+function teacherPreview(inputId, prevId, skid) {
+  var sk = skills.find(function(x) { return x.id === skid; });
+  var inp = document.getElementById(inputId);
+  var prev = document.getElementById(prevId);
+  if (!inp || !prev) return;
+  prev.textContent = timeMeaning(inp.value, sk);
+}
+function teacherSaveEntry(studentId, entryId, skid, inputId) {
+  var sk = skills.find(function(x) { return x.id === skid; });
+  var inp = document.getElementById(inputId);
+  var parsed = parseTimeInput(inp && inp.value, sk);
+  var alertBox = document.getElementById("sp-edit-alert");
+  function note(msg, ok) {
+    if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
+  }
+  if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
+  note("Saving…", true);
+  sb.from("entries").update({ value: parsed.value }).eq("id", entryId).then(function(r) {
+    if (r.error) { note("Error: " + r.error.message); return; }
+    applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
+    openSP(studentId);
+    var box = document.getElementById("sp-edit-alert");
+    if (box) box.innerHTML = '<div class="alert a-ok">✓ Saved as ' + formatScore(parsed.value, sk) + "</div>";
+    renderRoster();
+    renderProgress();
+    renderLB();
+  });
+}
+function teacherDeleteEntry(studentId, entryId, skid) {
+  if (!confirm("Delete this score? This cannot be undone.")) return;
+  sb.from("entries").delete().eq("id", entryId).then(function(r) {
+    if (r.error) {
+      var alertBox = document.getElementById("sp-edit-alert");
+      if (alertBox) alertBox.innerHTML = '<div class="alert a-err">Error: ' + r.error.message + "</div>";
+      return;
+    }
+    applyLocalEntryDelete(studentId, skid, entryId);
+    openSP(studentId);
+    renderRoster();
+    renderProgress();
+    renderLB();
+  });
 }
 
 // ── ADMIN ────────────────────────────────────────────────────
@@ -3336,7 +3470,7 @@ function openSP(id) {
           var h = Math.max(4, Math.round(((sk.lower_better ? mx - v : v - mn) / rng) * 56));
           var isLast = i === vals.length - 1;
           var col = isLast ? "var(--gold)" : (i > 0 && (sk.lower_better ? v < vals[i-1] : v > vals[i-1]) ? "rgba(201,168,76,.5)" : "var(--surface3)");
-          return '<div style="display:flex;flex-direction:column;align-items:center;flex:1"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">' + v + '</div><div style="width:100%;height:' + h + 'px;background:' + col + ';border-radius:3px 3px 0 0"></div></div>';
+          return '<div style="display:flex;flex-direction:column;align-items:center;flex:1"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">' + formatTimeValue(v, sk) + '</div><div style="width:100%;height:' + h + 'px;background:' + col + ';border-radius:3px 3px 0 0"></div></div>';
         }).join("") +
         (goal ? '<div style="position:absolute;left:0;right:0;height:1px;background:rgba(201,168,76,.6);bottom:' + Math.round(((sk.lower_better?mx-goal:goal-mn)/rng)*56) + 'px"><span style="position:absolute;right:0;top:-14px;font-size:9px;color:var(--gold)">🎯' + goal + '</span></div>' : "") +
         '</div>' +
@@ -3354,14 +3488,14 @@ function openSP(id) {
         : '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">No entries yet for this skill</div>') +
       '</div>';
   }).join(""));
+  spStudentId = s.id;
+  renderSpEntries(s.id);
   document.getElementById("sp-modal").classList.remove("hidden");
 }
-function closeSP() { document.getElementById("sp-modal").classList.add("hidden"); }
+function closeSP() { document.getElementById("sp-modal").classList.add("hidden"); spStudentId = null; }
 function saveGoals() {
-  var sid = null;
-  // Find active student in profile modal
-  var spName = document.getElementById("sp-name").textContent;
-  var s = students.find(function(x) { return (x.first + " " + x.last) === spName; });
+  var s = (spStudentId && (students.find(function(x) { return x.id === spStudentId; }) || allStudents().find(function(x) { return x.id === spStudentId; })))
+    || students.find(function(x) { return (x.first + " " + x.last) === document.getElementById("sp-name").textContent; });
   if (!s) return;
   var goals = {};
   skills.forEach(function(sk) {
@@ -3371,7 +3505,116 @@ function saveGoals() {
     if (gp.ok) goals[sk.id] = gp.value;
   });
   studentGoals[s.id] = goals;
-  openSP(s.id);
+  sb.from("students").update({ goals: goals }).eq("id", s.id).then(function() { openSP(s.id); });
+}
+
+function applyLocalEntryUpdate(studentId, skid, entryId, newValue) {
+  var raw = entries[studentId] && entries[studentId][skid];
+  if (!raw) return;
+  var idx = raw.findIndex(function(e) { return e && e.id === entryId; });
+  if (idx > -1) {
+    if (typeof raw[idx] === "object") raw[idx].value = newValue;
+    else raw[idx] = newValue;
+  }
+}
+function applyLocalEntryDelete(studentId, skid, entryId) {
+  var raw = entries[studentId] && entries[studentId][skid];
+  if (!raw) return;
+  var idx = raw.findIndex(function(e) { return e && e.id === entryId; });
+  if (idx > -1) raw.splice(idx, 1);
+}
+
+function renderSpEntries(studentId) {
+  var el = document.getElementById("sp-entries");
+  if (!el) return;
+  var s = students.find(function(x) { return x.id === studentId; }) || allStudents().find(function(x) { return x.id === studentId; });
+  if (!s) { el.innerHTML = ""; return; }
+  var html = '<div class="row" style="margin-bottom:8px">' +
+    '<div style="font-family:\'Cormorant Garamond\',serif;font-size:16px;font-weight:700;color:var(--gold)">✏️ Edit scores</div>' +
+    '</div>' +
+    '<div id="sp-edit-alert"></div>' +
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">' +
+      'Fix a student mistake here. For times, a decimal is seconds and a colon is minutes:seconds — ' +
+      '<strong style="color:var(--gold2)">1.4</strong> = 1.4 seconds, ' +
+      '<strong style="color:var(--gold2)">1:04</strong> (or 1:4) = 1 minute 4 seconds.' +
+    '</div>';
+  var any = false;
+  skills.forEach(function(sk) {
+    var list = getEntries(s.id, sk.id) || [];
+    if (!list.length) return;
+    any = true;
+    html += '<div style="margin-bottom:16px">' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:8px">' + sk.name +
+      ' <span style="font-weight:400;color:var(--text-muted);font-size:11px">' + (isTimeSkill(sk) ? "sec or mm:ss" : sk.unit) + "</span></div>";
+    list.forEach(function(e, i) {
+      var val = typeof e === "object" ? e.value : e;
+      var eid = typeof e === "object" ? e.id : "";
+      var week = (typeof e === "object" && e.week_label) ? e.week_label : ("Entry " + (i + 1));
+      var inputId = "sp-in-" + i + "-" + sk.id;
+      var prevId = "sp-prev-" + i + "-" + sk.id;
+      var shown = formatTimeValue(val, sk);
+      html += '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
+        '<div style="font-size:11px;color:var(--text-muted);min-width:120px">' + week + "</div>" +
+        '<input class="sp-edit-input" id="' + inputId + '" value="' + String(shown).replace(/"/g, "&quot;") + '" ' +
+          (isTimeSkill(sk)
+            ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"'
+            : 'type="number" step="0.1"') +
+          ' oninput="teacherPreview(\'' + inputId + '\',\'' + prevId + '\',\'' + sk.id + '\')"' +
+          ' style="width:118px;text-align:center;font-size:16px;font-weight:700;padding:8px 10px"/>' +
+        '<div id="' + prevId + '" style="font-size:12px;color:var(--gold2);flex:1;min-width:160px">' + timeMeaning(shown, sk) + "</div>" +
+        (eid
+          ? '<button class="gold" style="width:auto;font-size:12px;padding:6px 12px" onclick="teacherSaveEntry(\'' + s.id + '\',\'' + eid + '\',\'' + sk.id + '\',\'' + inputId + '\')">Save</button>' +
+            '<button style="width:auto;font-size:12px;padding:6px 10px;color:#F0A090;background:rgba(192,57,43,0.18);border-color:transparent" onclick="teacherDeleteEntry(\'' + s.id + '\',\'' + eid + '\',\'' + sk.id + '\')">Delete</button>'
+          : '<span style="font-size:11px;color:var(--text-muted)">Reload to edit</span>') +
+      "</div>";
+    });
+    html += "</div>";
+  });
+  if (!any) html += '<div style="font-size:13px;color:var(--text-muted);padding:6px 0">No scores yet for this student.</div>';
+  el.innerHTML = html;
+}
+function teacherPreview(inputId, prevId, skid) {
+  var sk = skills.find(function(x) { return x.id === skid; });
+  var inp = document.getElementById(inputId);
+  var prev = document.getElementById(prevId);
+  if (!inp || !prev) return;
+  prev.textContent = timeMeaning(inp.value, sk);
+}
+function teacherSaveEntry(studentId, entryId, skid, inputId) {
+  var sk = skills.find(function(x) { return x.id === skid; });
+  var inp = document.getElementById(inputId);
+  var parsed = parseTimeInput(inp && inp.value, sk);
+  var alertBox = document.getElementById("sp-edit-alert");
+  function note(msg, ok) {
+    if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
+  }
+  if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
+  note("Saving…", true);
+  sb.from("entries").update({ value: parsed.value }).eq("id", entryId).then(function(r) {
+    if (r.error) { note("Error: " + r.error.message); return; }
+    applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
+    openSP(studentId);
+    var box = document.getElementById("sp-edit-alert");
+    if (box) box.innerHTML = '<div class="alert a-ok">✓ Saved as ' + formatScore(parsed.value, sk) + "</div>";
+    renderRoster();
+    renderProgress();
+    renderLB();
+  });
+}
+function teacherDeleteEntry(studentId, entryId, skid) {
+  if (!confirm("Delete this score? This cannot be undone.")) return;
+  sb.from("entries").delete().eq("id", entryId).then(function(r) {
+    if (r.error) {
+      var alertBox = document.getElementById("sp-edit-alert");
+      if (alertBox) alertBox.innerHTML = '<div class="alert a-err">Error: ' + r.error.message + "</div>";
+      return;
+    }
+    applyLocalEntryDelete(studentId, skid, entryId);
+    openSP(studentId);
+    renderRoster();
+    renderProgress();
+    renderLB();
+  });
 }
 
 // ── ADMIN ────────────────────────────────────────────────────
@@ -3818,7 +4061,11 @@ function handleDeleteClick(btn) {
 }
 function editEntry(entryId, skid, currentValue, weekLabel) {
   var sk = skills.find(function(x) { return x.id === skid; });
-  var newVal = prompt("Edit " + (sk ? sk.name : "score") + " [" + weekLabel + "] — current: " + formatScore(currentValue, sk) + (isTimeSkill(sk) ? "  (seconds or mm:ss)" : ""), isTimeSkill(sk) ? formatTimeValue(currentValue, sk) : currentValue);
+  var newVal = prompt(
+    "Edit " + (sk ? sk.name : "score") + " [" + weekLabel + "]\nCurrent: " + formatScore(currentValue, sk) +
+    (isTimeSkill(sk) ? "\n\n1.4 = 1.4 seconds\n1:04 or 1:4 = 1 minute 4 seconds" : ""),
+    isTimeSkill(sk) ? formatTimeValue(currentValue, sk) : currentValue
+  );
   if (newVal === null || newVal.trim() === "") return;
   var parsedIn = parseTimeInput(newVal, sk);
   if (!parsedIn.ok) { alert(parsedIn.error || "Please enter a valid score."); return; }

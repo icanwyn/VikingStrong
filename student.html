@@ -262,6 +262,31 @@ function formatScore(value, sk) {
   var sec = timeUnitKind(sk) === "min" ? Number(value) * 60 : Number(value);
   return sec < 60 ? formatTimeValue(value, sk) + " sec" : formatTimeValue(value, sk);
 }
+function showTimeHint(input, skid) {
+  var sk = skills.find(function(x) { return x.id === skid; });
+  var hint = document.getElementById("thint-" + skid);
+  if (!hint) return;
+  var raw = input.value;
+  if (!String(raw).trim()) {
+    hint.textContent = "1.4 = 1.4 seconds   ·   1:04 = 1 minute 4 seconds";
+    hint.style.color = "";
+    return;
+  }
+  var p = parseTimeInput(raw, sk);
+  if (!p.ok) {
+    hint.textContent = p.error;
+    hint.style.color = "#C0392B";
+    return;
+  }
+  var sec = timeUnitKind(sk) === "min" ? p.value * 60 : p.value;
+  hint.style.color = "#8B6A30";
+  if (sec < 60) hint.textContent = "This will save as " + formatTimeValue(p.value, sk) + " seconds (not mm:ss)";
+  else {
+    var m = Math.floor(sec / 60);
+    var s = Math.round((sec - m * 60) * 10) / 10;
+    hint.textContent = "This will save as " + formatTimeValue(p.value, sk) + "  (" + m + " min " + s + " sec)";
+  }
+}
 function getRanked(skid) {
   var sk = skills.find(function(s) { return s.id === skid; });
   return students.map(function(s) { return { id: s.id, val: getLastVal(s.id, skid) }; })
@@ -409,7 +434,7 @@ function loadScoreScreen() {
       (last !== null ? '<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Last</div><div style="font-size:15px;font-weight:600;color:var(--gold3)">' + formatScore(last, sk) + "</div></div>" : "") +
       "</div>" +
       (isTimeSkill(sk)
-        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="Under 1 min: 47.2 &nbsp; Over 1 min: 6:42" id="sf-' + sk.id + '" style="font-size:24px;text-align:center;padding:14px"/><div style="font-size:11px;color:var(--text3);text-align:center;margin-top:6px">Seconds if under a minute. mm:ss if a minute or more.</div>'
+        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04" id="sf-' + sk.id + '" style="font-size:24px;text-align:center;padding:14px" oninput="showTimeHint(this,\'' + sk.id + '\')"/><div id="thint-' + sk.id + '" style="font-size:12px;color:var(--text3);text-align:center;margin-top:6px">1.4 = 1.4 seconds &nbsp;·&nbsp; 1:04 = 1 minute 4 seconds</div>'
         : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="sf-' + sk.id + '" style="font-size:24px;text-align:center;padding:14px"/>') +
       "</div>";
   }).join("");
