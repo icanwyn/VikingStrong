@@ -1888,7 +1888,7 @@ function resetOne(id) {
 }
 function resetPeriodCodes(event) {
   var period = (document.getElementById("roster-period") || {}).value || "all";
-  var list = period === "all" ? students.slice() : students.filter(function(s) { return s.period === +period; });
+  var list = period === "all" ? students.slice() : students.filter(function(s) { return String(s.period) === String(period); });
   var label = period === "all" ? "ALL students" : "Period " + period + " students";
   if (!list.length) { alert("No students found."); return; }
   if (!confirm("Reset codes for " + list.length + " " + label + "?\n\nAll old codes stop working immediately.")) return;
@@ -2204,7 +2204,7 @@ function openEmail() {
 function closeEmail() { document.getElementById("email-modal").classList.add("hidden"); }
 function renderEmailList() {
   var period = (document.getElementById("email-period") || {}).value || "all";
-  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  var list = period === "all" ? students : students.filter(function(s) { return String(s.period) === String(period); });
   var withEmail = list.filter(function(s) { return s.email; });
   document.getElementById("email-count").textContent = withEmail.length + " with email · " + sentEmails.length + " sent";
   setHTML("email-list", list.map(function(s) {
@@ -2240,7 +2240,7 @@ function sendEmail(id) {
 }
 function sendAllEmails() {
   var period = (document.getElementById("email-period") || {}).value || "all";
-  var list = (period === "all" ? students : students.filter(function(s) { return s.period === +period; })).filter(function(s) { return s.email; });
+  var list = (period === "all" ? students : students.filter(function(s) { return String(s.period) === String(period); })).filter(function(s) { return s.email; });
   if (!list.length) { alert("No students with email in this period."); return; }
   var i = 0;
   var next = function() {
@@ -2840,7 +2840,7 @@ function buildGrid() {
   var header = document.getElementById("grid-unit-header");
   if (header && sk) header.textContent = sk.name + (isTimeSkill(sk) ? " (sec or mm:ss)" : " (" + sk.unit + ")");
 
-  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  var list = period === "all" ? students : students.filter(function(s) { return String(s.period) === String(period); });
   list = list.slice().sort(function(a,b) { return a.last.localeCompare(b.last); });
 
   var tbody = document.getElementById("score-grid-body");
@@ -3237,7 +3237,7 @@ function openEmail() {
 function closeEmail() { document.getElementById("email-modal").classList.add("hidden"); }
 function renderEmailList() {
   var period = (document.getElementById("email-period") || {}).value || "all";
-  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  var list = period === "all" ? students : students.filter(function(s) { return String(s.period) === String(period); });
   var withEmail = list.filter(function(s) { return s.email; });
   document.getElementById("email-count").textContent = withEmail.length + " with email · " + sentEmails.length + " sent";
   setHTML("email-list", list.map(function(s) {
@@ -3273,7 +3273,7 @@ function sendEmail(id) {
 }
 function sendAllEmails() {
   var period = (document.getElementById("email-period") || {}).value || "all";
-  var list = (period === "all" ? students : students.filter(function(s) { return s.period === +period; })).filter(function(s) { return s.email; });
+  var list = (period === "all" ? students : students.filter(function(s) { return String(s.period) === String(period); })).filter(function(s) { return s.email; });
   if (!list.length) { alert("No students with email in this period."); return; }
   var i = 0;
   var next = function() {
@@ -3873,7 +3873,7 @@ function buildGrid() {
   var header = document.getElementById("grid-unit-header");
   if (header && sk) header.textContent = sk.name + (isTimeSkill(sk) ? " (sec or mm:ss)" : " (" + sk.unit + ")");
 
-  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  var list = period === "all" ? students : students.filter(function(s) { return String(s.period) === String(period); });
   list = list.slice().sort(function(a,b) { return a.last.localeCompare(b.last); });
 
   var tbody = document.getElementById("score-grid-body");
