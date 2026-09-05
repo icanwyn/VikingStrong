@@ -1,0 +1,27 @@
+name: Apply invite-admin patch
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "patches/invite-admin.patch"
+      - ".github/workflows/apply-invite-patch.yml"
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch to index.html
+        run: |
+          set -e
+          if git apply --check patches/invite-admin.patch; then
+            git apply patches/invite-admin.patch
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add index.html
+            git commit -m "Gate teacher signup with an admin-managed invite code."
+            git push
+          else
+            echo "Patch already applied or not applicable; skipping."
+          fi
