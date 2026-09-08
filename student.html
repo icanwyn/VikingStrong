@@ -188,10 +188,16 @@ button.primary{
         <span id="week-label" style="font-size:12px;color:var(--text3);background:#fff;padding:4px 14px;border-radius:99px;border:1px solid rgba(30,35,64,0.12)"></span>
       </div>
       <div class="card" style="margin-bottom:14px">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📋 This Week's Scores</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:6px">📋 This Week's Scores</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Change a value and save to update. You can only have one score per skill each week.</div>
         <div id="score-fields"></div>
         <div id="score-alert" style="margin-top:10px"></div>
-        <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save My Scores ✓</button>
+        <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save / Update scores</button>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:6px">✏️ Edit past scores</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Fix a mistake from an earlier week.</div>
+        <div id="stu-past-scores"></div>
       </div>
       <div class="card">
         <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:14px">📈 My Progress</div>
@@ -281,8 +287,33 @@ function show(id) {
   if (logBtn) logBtn.classList.toggle("hidden", !onBoard);
   if (id !== "screen-board" && id !== "screen-loading" && id !== "screen-error") lastScreen = id;
 }
-function getVals(sid, skid) { return (entries[sid] && entries[sid][skid]) || []; }
-function getLastVal(sid, skid) { var v = getVals(sid, skid); return v.length ? v[v.length - 1] : null; }
+function weekLabel() {
+  return "Week of " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function weekMatches(stored, current) {
+  if (!stored || !current) return false;
+  if (stored === current) return true;
+  var strip = function(s) { return String(s).replace(/,?\s*\d{4}$/, "").trim(); };
+  return strip(stored) === strip(current);
+}
+function getEntries(sid, skid) {
+  return (entries[sid] && entries[sid][skid]) ? entries[sid][skid] : [];
+}
+function getVals(sid, skid) {
+  return getEntries(sid, skid).map(function(e) { return typeof e === "object" ? e.value : e; });
+}
+function getLastVal(sid, skid) {
+  var v = getVals(sid, skid);
+  return v.length ? v[v.length - 1] : null;
+}
+function findWeekEntry(sid, skid, week) {
+  var list = getEntries(sid, skid);
+  for (var i = list.length - 1; i >= 0; i--) {
+    var e = list[i];
+    if (typeof e === "object" && weekMatches(e.week_label, week)) return e;
+  }
+  return null;
+}
 function isTimeSkill(sk) {
   var u = String((sk && sk.unit) != null ? sk.unit : sk || "").toLowerCase();
   return /(sec|second|\bmin|minute|\btime\b)/.test(u) || u === "s" || u === "m";
@@ -452,7 +483,7 @@ function bootStudent() {
       (er.data || []).forEach(function(e) {
         if (!entries[e.student_id]) entries[e.student_id] = {};
         if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
-        entries[e.student_id][e.skill_id].push(Number(e.value));
+        entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
       });
       var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
       var pf = document.getElementById("s-period");
@@ -709,21 +740,26 @@ function loadScoreScreen() {
   av.textContent = s.first[0] + s.last[0];
   document.getElementById("d-name").textContent = s.first + " " + s.last;
   document.getElementById("d-sub").textContent = "Grade " + s.grade + " · Period " + s.period;
-  var week = "Week of " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  var week = weekLabel();
   document.getElementById("week-label").textContent = week;
   document.getElementById("score-fields").innerHTML = skills.map(function(sk) {
+    var existing = findWeekEntry(s.id, sk.id, week);
     var last = getLastVal(s.id, sk.id);
+    var shown = existing ? formatTimeValue(existing.value, sk) : "";
+    var status = existing
+      ? '<span style="font-size:11px;color:var(--gold3)">This week — edit to update</span>'
+      : (last !== null ? '<span style="font-size:11px;color:var(--text3)">Last: </span><span style="font-size:12px;font-weight:600;color:var(--gold3)">' + formatScore(last, sk) + "</span>" : '<span style="font-size:11px;color:var(--text3)">No entries yet</span>');
     return '<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid rgba(30,35,64,0.08)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
       '<div><div style="font-weight:600;font-size:15px">' + sk.name + '</div>' +
       '<div style="font-size:12px;color:var(--text2)">' + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + " · " + (isTimeSkill(sk) ? "time" : sk.unit) + "</div></div>" +
-      (last !== null ? '<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Last</div><div style="font-size:15px;font-weight:600;color:var(--gold3)">' + formatScore(last, sk) + "</div></div>" : "") +
-      "</div>" +
+      '<div style="text-align:right">' + status + "</div></div>" +
       (isTimeSkill(sk)
-        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04" id="sf-' + sk.id + '" style="font-size:24px;text-align:center;padding:14px" oninput="showTimeHint(this,\'' + sk.id + '\')"/><div id="thint-' + sk.id + '" style="font-size:12px;color:var(--text3);text-align:center;margin-top:6px">1.4 = 1.4 seconds &nbsp;·&nbsp; 1:04 = 1 minute 4 seconds</div>'
-        : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="sf-' + sk.id + '" style="font-size:24px;text-align:center;padding:14px"/>') +
+        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04" id="sf-' + sk.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '" style="font-size:24px;text-align:center;padding:14px" oninput="showTimeHint(this,\'' + sk.id + '\')"/><div id="thint-' + sk.id + '" style="font-size:12px;color:var(--text3);text-align:center;margin-top:6px">1.4 = 1.4 seconds &nbsp;·&nbsp; 1:04 = 1 minute 4 seconds</div>'
+        : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="sf-' + sk.id + '" value="' + shown + '" style="font-size:24px;text-align:center;padding:14px"/>') +
       "</div>";
   }).join("");
+  renderPastScores();
   document.getElementById("my-progress").innerHTML = skills.map(function(sk) {
     var vals = getVals(s.id, sk.id);
     var rank = getRank(s.id, sk.id);
@@ -732,11 +768,91 @@ function loadScoreScreen() {
       rankBadge(rank, students.length) + "</div>";
   }).join("") || '<div style="color:var(--text3);font-size:13px;text-align:center">No skills yet.</div>';
 }
+function renderPastScores() {
+  var el = document.getElementById("stu-past-scores");
+  if (!el || !selectedStudent) return;
+  var week = weekLabel();
+  var blocks = skills.map(function(sk) {
+    var list = getEntries(selectedStudent.id, sk.id).filter(function(e) {
+      return e && typeof e === "object" && e.id && !weekMatches(e.week_label, week);
+    });
+    if (!list.length) return "";
+    return '<div style="margin-bottom:14px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">' + sk.name + "</div>" +
+      list.map(function(e, i) {
+        var inputId = "past-" + sk.id + "-" + i;
+        return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(30,35,64,0.08)">' +
+          '<div style="font-size:11px;color:var(--text3);min-width:120px">' + (e.week_label || "Earlier") + "</div>" +
+          '<input id="' + inputId + '" value="' + formatTimeValue(e.value, sk).replace(/"/g, "&quot;") + '" ' +
+          (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"' : 'type="number" step="0.1"') +
+          ' style="width:120px;text-align:center;font-size:16px;font-weight:700;padding:8px"/>' +
+          '<button class="primary" style="width:auto;padding:7px 12px;font-size:12px" onclick="savePastScore(\'' + e.id + '\',\'' + sk.id + '\',\'' + inputId + '\')">Update</button></div>';
+      }).join("") + "</div>";
+  }).filter(Boolean).join("");
+  el.innerHTML = blocks || '<div style="font-size:13px;color:var(--text3)">No earlier scores to edit.</div>';
+}
+function savePastScore(entryId, skid, inputId) {
+  var sk = skills.find(function(x) { return x.id === skid; });
+  var inp = document.getElementById(inputId);
+  var parsed = parseTimeInput(inp && inp.value, sk);
+  var alertBox = document.getElementById("score-alert");
+  if (!parsed.ok) {
+    if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + (parsed.error || "Invalid score") + "</div>";
+    return;
+  }
+  sb.from("entries").update({ value: parsed.value }).eq("id", entryId).then(function(r) {
+    if (r.error) {
+      if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + r.error.message + "</div>";
+      return;
+    }
+    var list = getEntries(selectedStudent.id, skid);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].id === entryId) list[i].value = parsed.value;
+    }
+    if (alertBox) alertBox.innerHTML = '<div class="alert alert-success">✓ Updated to ' + formatScore(parsed.value, sk) + "</div>";
+    loadScoreScreen();
+  });
+}
+function applyLocalEntry(row, id) {
+  if (!entries[row.student_id]) entries[row.student_id] = {};
+  if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
+  var list = entries[row.student_id][row.skill_id];
+  var found = false;
+  for (var i = 0; i < list.length; i++) {
+    if (typeof list[i] === "object" && (list[i].id === id || weekMatches(list[i].week_label, row.week_label))) {
+      list[i].value = row.value;
+      list[i].id = id || list[i].id;
+      list[i].week_label = row.week_label;
+      found = true;
+      break;
+    }
+  }
+  if (!found) list.push({ id: id, value: row.value, week_label: row.week_label });
+}
+function upsertScoreRow(row) {
+  var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
+  function doUpdate(id) {
+    return sb.from("entries").update({ value: row.value }).eq("id", id).then(function(r) {
+      if (r.error) throw r.error;
+      applyLocalEntry(row, id);
+    });
+  }
+  function doInsert() {
+    return sb.from("entries").insert([row]).select("id").then(function(r) {
+      if (r.error) throw r.error;
+      applyLocalEntry(row, r.data && r.data[0] && r.data[0].id);
+    });
+  }
+  if (local && local.id) return doUpdate(local.id);
+  return sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
+    var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
+    return hit ? doUpdate(hit.id) : doInsert();
+  });
+}
 function submitScores() {
   var btn = document.getElementById("submit-btn");
   btn.disabled = true;
   btn.textContent = "Saving…";
-  var week = document.getElementById("week-label").textContent || ("Week of " + new Date().toLocaleDateString());
+  var week = document.getElementById("week-label").textContent || weekLabel();
   var rows = [];
   for (var i = 0; i < skills.length; i++) {
     var sk = skills[i];
@@ -746,7 +862,7 @@ function submitScores() {
     if (!parsed.ok) {
       document.getElementById("score-alert").innerHTML = '<div class="alert alert-error">' + sk.name + ": " + parsed.error + "</div>";
       btn.disabled = false;
-      btn.textContent = "Save My Scores ✓";
+      btn.textContent = "Save / Update scores";
       return;
     }
     rows.push({ student_id: selectedStudent.id, skill_id: sk.id, value: parsed.value, week_label: week });
@@ -754,32 +870,30 @@ function submitScores() {
   if (!rows.length) {
     document.getElementById("score-alert").innerHTML = '<div class="alert alert-error">Enter at least one score before saving.</div>';
     btn.disabled = false;
-    btn.textContent = "Save My Scores ✓";
+    btn.textContent = "Save / Update scores";
     return;
   }
-  sb.from("entries").insert(rows).then(function(r) {
-    if (r.error) {
-      document.getElementById("score-alert").innerHTML = '<div class="alert alert-error">' + r.error.message + "</div>";
+  var next = function(i) {
+    if (i >= rows.length) {
+      document.getElementById("success-msg").textContent = "Scores saved for " + selectedStudent.first + "! You can come back any time this week to edit.";
+      document.getElementById("success-ranks").innerHTML = skills.map(function(sk) {
+        var rank = getRank(selectedStudent.id, sk.id);
+        var val = getLastVal(selectedStudent.id, sk.id);
+        if (val === null) return "";
+        return '<div class="rank-row"><div style="flex:1;font-weight:500;font-size:14px">' + sk.name + "</div>" + rankBadge(rank) + "</div>";
+      }).filter(Boolean).join("") || '<div style="color:var(--text3);font-size:13px;text-align:center">Keep logging to see rankings.</div>';
+      show("screen-success");
       btn.disabled = false;
-      btn.textContent = "Save My Scores ✓";
+      btn.textContent = "Save / Update scores";
       return;
     }
-    rows.forEach(function(row) {
-      if (!entries[row.student_id]) entries[row.student_id] = {};
-      if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
-      entries[row.student_id][row.skill_id].push(row.value);
+    upsertScoreRow(rows[i]).then(function() { next(i + 1); }).catch(function(err) {
+      document.getElementById("score-alert").innerHTML = '<div class="alert alert-error">' + (err && err.message ? err.message : "Could not save") + "</div>";
+      btn.disabled = false;
+      btn.textContent = "Save / Update scores";
     });
-    document.getElementById("success-msg").textContent = "Scores saved for " + selectedStudent.first + "! Great work this week.";
-    document.getElementById("success-ranks").innerHTML = skills.map(function(sk) {
-      var rank = getRank(selectedStudent.id, sk.id);
-      var val = getLastVal(selectedStudent.id, sk.id);
-      if (val === null) return "";
-      return '<div class="rank-row"><div style="flex:1;font-weight:500;font-size:14px">' + sk.name + "</div>" + rankBadge(rank, students.length) + "</div>";
-    }).filter(Boolean).join("") || '<div style="color:var(--text3);font-size:13px;text-align:center">Keep logging to see rankings.</div>';
-    show("screen-success");
-    btn.disabled = false;
-    btn.textContent = "Save My Scores ✓";
-  });
+  };
+  next(0);
 }
 function goBack(screen) {
   selectedStudent = null;

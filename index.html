@@ -602,7 +602,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
               </div>
               <div style="flex:1;min-width:140px">
                 <label class="lbl">Week</label>
-                <input id="grid-week" value="Week 1" style="width:100%"/>
+                <input id="grid-week" value="Week 1" style="width:100%" onchange="buildGrid()" oninput="buildGrid()"/>
               </div>
             </div>
             <div id="grid-alert"></div>
@@ -1094,6 +1094,23 @@ function getEntries(sid, skid) {
   return (entries[sid] && entries[sid][skid]) ? entries[sid][skid] : [];
 }
 function getLast(sid, skid) { var v = getVals(sid, skid); return v.length ? v[v.length-1] : null; }
+function weekLabel() {
+  return "Week of " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function weekMatches(stored, current) {
+  if (!stored || !current) return false;
+  if (stored === current) return true;
+  var strip = function(s) { return String(s).replace(/,?\s*\d{4}$/, "").trim(); };
+  return strip(stored) === strip(current);
+}
+function findWeekEntry(sid, skid, week) {
+  var list = getEntries(sid, skid);
+  for (var i = list.length - 1; i >= 0; i--) {
+    var e = list[i];
+    if (typeof e === "object" && weekMatches(e.week_label, week)) return e;
+  }
+  return null;
+}
 function isTimeSkill(sk) {
   var u = String((sk && sk.unit) != null ? sk.unit : sk || "").toLowerCase();
   return /(sec|second|\bmin|minute|\btime\b)/.test(u) || u === "s" || u === "m";
@@ -1472,7 +1489,7 @@ function renderRoster() {
     var logged = skills.filter(function(sk) { return getVals(s.id, sk.id).length > 0; }).length;
     var pct = skills.length ? (logged / skills.length * 100).toFixed(0) : 0;
     return '<tr>' +
-      '<td><div class="row">' + avHTML(s.first, s.last, 28) + '<div>' + (s.teacher_id !== ME.id ? '<span style="background:var(--purple-lt);color:var(--purple);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;display:block;margin-bottom:2px">Colleague</span>' : '') + '<div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + '</div></div></div></td>' +
+      '<td><div class="row">' + avHTML(s.first, s.last, 28) + '<div>' + (s.teacher_id !== ME.id ? '<span style="background:var(--purple-lt);color:var(--purple);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;display:block;margin-bottom:2px">Colleague</span>' : '') + '<div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + '</div><button onclick="openSP(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto;margin-top:4px">Edit scores</button></div></div></td>' +
       '<td style="color:var(--text2)">' + s.grade + '</td>' +
       '<td style="color:var(--text2)">P' + s.period + '</td>' +
       '<td><div class="row" style="gap:6px"><span class="mono badge b-gray" style="font-size:11px">' + (s.access_code || "—") + '</span><button onclick="resetOne(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto" title="New code">↻</button></div></td>' +
@@ -1630,7 +1647,7 @@ function renderDash() {
   document.getElementById("dash-sub").textContent = "Grade " + s.grade + " · Period " + s.period;
 
   // Week label
-  var week = "Week of " + new Date().toLocaleDateString("en-US", {month:"long", day:"numeric", year:"numeric"});
+  var week = weekLabel();
   var wl = document.getElementById("week-label");
   if (wl) wl.textContent = week;
 
@@ -1650,18 +1667,20 @@ function renderDash() {
       '<div class="stat-l">' + c.l + '</div></div>';
   }).join(""));
 
-  // Score entry fields with last value shown
+  // Score entry fields — prefill this week so it can be edited
   setHTML("entry-fields", skills.map(function(sk) {
     var last = getLast(s.id, sk.id);
+    var existing = findWeekEntry(s.id, sk.id, week);
+    var shown = existing ? formatTimeValue(existing.value, sk) : "";
     return '<div style="margin-bottom:14px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
       '<label style="font-size:13px;font-weight:500">' + sk.name + '</label>' +
       '<div style="text-align:right">' +
-        (last !== null ? '<span style="font-size:11px;color:var(--text3)">Last: </span><span style="font-size:12px;font-weight:500;color:var(--gold)">' + formatScore(last, sk) + '</span>' : '<span style="font-size:11px;color:var(--text3)">No entries yet</span>') +
+        (existing ? '<span style="font-size:11px;color:var(--gold)">This week — edit to update</span>' : (last !== null ? '<span style="font-size:11px;color:var(--text3)">Last: </span><span style="font-size:12px;font-weight:500;color:var(--gold)">' + formatScore(last, sk) + '</span>' : '<span style="font-size:11px;color:var(--text3)">No entries yet</span>')) +
       '</div></div>' +
       (isTimeSkill(sk)
-        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42" id="ef-' + sk.id + '" style="font-size:18px;text-align:center;padding:12px"/><div style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px">Under 1 min: seconds &nbsp;·&nbsp; Over 1 min: mm:ss</div>'
-        : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="ef-' + sk.id + '" style="font-size:18px;text-align:center;padding:12px"/>') +
+        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42" id="ef-' + sk.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '" style="font-size:18px;text-align:center;padding:12px"/><div style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px">Under 1 min: seconds &nbsp;·&nbsp; Over 1 min: mm:ss</div>'
+        : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="ef-' + sk.id + '" value="' + shown + '" style="font-size:18px;text-align:center;padding:12px"/>') +
       '</div>';
   }).join(""));
 }
@@ -1797,7 +1816,7 @@ function saveStudentGoals() {
 function submitScores() {
   var btn = document.getElementById("submit-btn");
   btn.disabled = true; btn.textContent = "Saving…";
-  var week = "Week of " + new Date().toLocaleDateString("en-US", {month:"short", day:"numeric"});
+  var week = weekLabel();
   var rows = [];
   for (var si = 0; si < skills.length; si++) {
     var sk = skills[si];
@@ -1812,21 +1831,44 @@ function submitScores() {
     rows.push({student_id: portalStudent.id, skill_id: sk.id, value: parsed.value, week_label: week});
   }
   if (!rows.length) { btn.disabled = false; btn.textContent = "Submit Scores"; return; }
-  sb.from("entries").insert(rows).then(function(r) {
-    if (!r.error) {
-      rows.forEach(function(row) {
-        if (!entries[row.student_id]) entries[row.student_id] = {};
-        if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
-        entries[row.student_id][row.skill_id].push(row.value);
-      });
+  var next = function(i) {
+    if (i >= rows.length) {
       renderDash();
       var ok = document.getElementById("entry-ok");
-      ok.classList.remove("hidden");
-      setTimeout(function() { ok.classList.add("hidden"); }, 3000);
-      skills.forEach(function(sk) { var el = document.getElementById("ef-" + sk.id); if (el) el.value = ""; });
+      if (ok) { ok.classList.remove("hidden"); ok.textContent = "✓ Scores saved. You can edit this week any time."; setTimeout(function() { ok.classList.add("hidden"); }, 3000); }
+      btn.disabled = false; btn.textContent = "Submit Scores";
+      return;
     }
-    btn.disabled = false; btn.textContent = "Submit Scores";
-  });
+    var row = rows[i];
+    var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
+    var after = function(id) {
+      if (!entries[row.student_id]) entries[row.student_id] = {};
+      if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
+      var list = entries[row.student_id][row.skill_id];
+      var found = false;
+      for (var j = 0; j < list.length; j++) {
+        if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, row.week_label))) {
+          list[j].value = row.value; list[j].id = id || list[j].id; found = true; break;
+        }
+      }
+      if (!found) list.push({ id: id, value: row.value, week_label: row.week_label });
+      next(i + 1);
+    };
+    var fail = function(err) {
+      btn.disabled = false; btn.textContent = "Submit Scores";
+      alert(err && err.message ? err.message : "Could not save");
+    };
+    if (local && local.id) {
+      sb.from("entries").update({ value: row.value }).eq("id", local.id).then(function(r) { if (r.error) fail(r.error); else after(local.id); });
+      return;
+    }
+    sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
+      var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
+      if (hit) sb.from("entries").update({ value: row.value }).eq("id", hit.id).then(function(r) { if (r.error) fail(r.error); else after(hit.id); });
+      else sb.from("entries").insert([row]).select("id").then(function(r) { if (r.error) fail(r.error); else after(r.data && r.data[0] && r.data[0].id); });
+    });
+  };
+  next(0);
 }
 function portalOut() {
   portalStudent = null;
@@ -2846,16 +2888,19 @@ function buildGrid() {
   var tbody = document.getElementById("score-grid-body");
   if (!tbody) return;
 
+  var week = ((document.getElementById("grid-week") || {}).value || "").trim() || "Week 1";
   tbody.innerHTML = list.map(function(s) {
-    var existing = getLast(s.id, skid);
+    var last = getLast(s.id, skid);
+    var thisWeek = findWeekEntry(s.id, skid, week);
+    var shown = thisWeek ? formatTimeValue(thisWeek.value, sk) : "";
     return '<tr>' +
       '<td><div class="row">' + avHTML(s.first, s.last, 26) +
-        '<div><div style="font-weight:500;font-size:13px">' + s.first + ' ' + s.last + '</div>' +
-        (existing !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(existing, sk) + '</div>' : '') +
+        '<div><div style="font-weight:500;font-size:13px;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div>' +
+        (thisWeek ? '<div style="font-size:11px;color:var(--gold)">This week — edit below</div>' : (last !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(last, sk) + '</div>' : '')) +
         '</div></div></td>' +
       '<td style="color:var(--text2);font-size:13px">P' + s.period + '</td>' +
       '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
-        ' id="grid-' + s.id + '"' +
+        ' id="grid-' + s.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '"' +
         ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:140px"' +
         ' onkeydown=\"gridKeyNav(event,this)\"/></td>' +
       '</tr>';
@@ -3879,16 +3924,19 @@ function buildGrid() {
   var tbody = document.getElementById("score-grid-body");
   if (!tbody) return;
 
+  var week = ((document.getElementById("grid-week") || {}).value || "").trim() || "Week 1";
   tbody.innerHTML = list.map(function(s) {
-    var existing = getLast(s.id, skid);
+    var last = getLast(s.id, skid);
+    var thisWeek = findWeekEntry(s.id, skid, week);
+    var shown = thisWeek ? formatTimeValue(thisWeek.value, sk) : "";
     return '<tr>' +
       '<td><div class="row">' + avHTML(s.first, s.last, 26) +
-        '<div><div style="font-weight:500;font-size:13px">' + s.first + ' ' + s.last + '</div>' +
-        (existing !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(existing, sk) + '</div>' : '') +
+        '<div><div style="font-weight:500;font-size:13px;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div>' +
+        (thisWeek ? '<div style="font-size:11px;color:var(--gold)">This week — edit below</div>' : (last !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(last, sk) + '</div>' : '')) +
         '</div></div></td>' +
       '<td style="color:var(--text2);font-size:13px">P' + s.period + '</td>' +
       '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
-        ' id="grid-' + s.id + '"' +
+        ' id="grid-' + s.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '"' +
         ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:140px"' +
         ' onkeydown=\"gridKeyNav(event,this)\"/></td>' +
       '</tr>';
