@@ -500,6 +500,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem">
         <div class="tabs">
           <button class="tab on" id="tab-roster"   onclick="goTab('roster')">Roster</button>
+          <button class="tab"    id="tab-quickedit" onclick="goTab('quickedit')">Fix Scores</button>
           <button class="tab"    id="tab-upload"   onclick="goTab('upload')">CSV Upload</button>
           <button class="tab"    id="tab-add"      onclick="goTab('add')">Add Student</button>
           <button class="tab"    id="tab-scores"   onclick="goTab('scores')">⬆ Upload Scores</button>
@@ -531,6 +532,27 @@ tr:hover td{background:rgba(255,255,255,0.03)}
             <tbody id="roster-body"><tr><td colspan="6" style="text-align:center;padding:2rem"><div class="spinner"></div></td></tr></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- QUICK EDIT SCORES -->
+      <div id="pane-quickedit" class="hidden">
+        <div class="card" style="margin-bottom:14px">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:6px">Fix Scores</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Grouped by period. Each skill is its own section so you can scan times and correct mistakes. 1.4 = seconds, 1:04 = 1 min 4 sec.</div>
+          <div class="row" style="flex-wrap:wrap;gap:10px;margin-bottom:10px">
+            <div style="flex:1;min-width:140px">
+              <label class="lbl">Week</label>
+              <input id="qe-week" onchange="renderQuickEdit()" style="width:100%"/>
+            </div>
+            <div style="flex:1;min-width:140px">
+              <label class="lbl">Period</label>
+              <select id="qe-period" onchange="renderQuickEdit()" style="width:100%"><option value="all">All Periods</option></select>
+            </div>
+            <button onclick="saveQuickEditAll()" class="gold" style="align-self:flex-end;width:auto;padding:10px 16px">Save all changes</button>
+          </div>
+          <div id="qe-alert"></div>
+        </div>
+        <div id="qe-body"></div>
       </div>
 
       <!-- CSV UPLOAD -->
@@ -4447,7 +4469,7 @@ function goView(v) {
   if (v === "admin")       loadAdmin();
 }
 function goTab(t) {
-  ["roster","upload","add","scores","progress","skills","share"].forEach(function(id) {
+  ["roster","quickedit","upload","add","scores","progress","skills","share"].forEach(function(id) {
     var pane = document.getElementById("pane-" + id);
     var tab  = document.getElementById("tab-" + id);
     if (pane) pane.classList.toggle("hidden", id !== t);
@@ -4457,6 +4479,141 @@ function goTab(t) {
   if (t === "skills")   renderSkillsList();
   if (t === "share")    loadSharePanel();
   if (t === "scores")   initGridFilters();
+  if (t === "quickedit") renderQuickEdit();
+}
+function renderQuickEdit() {
+  var weekEl = document.getElementById("qe-week");
+  if (weekEl && !weekEl.value) weekEl.value = weekLabel();
+  var week = ((weekEl && weekEl.value) || "").trim() || weekLabel();
+  var periodFilter = (document.getElementById("qe-period") || {}).value || "all";
+  var pSel = document.getElementById("qe-period");
+  if (pSel) {
+    var cur = pSel.value || "all";
+    var pers = Array.from(new Set(allStudents().map(function(s) { return s.period; }))).sort(function(a, b) {
+      var na = parseInt(a, 10), nb = parseInt(b, 10);
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return String(a).localeCompare(String(b), undefined, { numeric: true });
+    });
+    pSel.innerHTML = '<option value="all">All Periods</option>' +
+      pers.map(function(p) { return '<option value="' + p + '">Period ' + p + "</option>"; }).join("");
+    pSel.value = pers.map(String).indexOf(String(cur)) >= 0 || cur === "all" ? cur : "all";
+    periodFilter = pSel.value || "all";
+  }
+  var list = allStudents().slice().sort(function(a, b) {
+    var pa = parseInt(a.period, 10), pb = parseInt(b.period, 10);
+    if (!isNaN(pa) && !isNaN(pb) && pa !== pb) return pa - pb;
+    var c = String(a.period).localeCompare(String(b.period), undefined, { numeric: true });
+    if (c) return c;
+    return String(a.last).localeCompare(String(b.last)) || String(a.first).localeCompare(String(b.first));
+  });
+  if (periodFilter !== "all") list = list.filter(function(s) { return String(s.period) === String(periodFilter); });
+  var periods = [];
+  list.forEach(function(s) {
+    var p = String(s.period);
+    if (periods.indexOf(p) < 0) periods.push(p);
+  });
+  var html = "";
+  periods.forEach(function(p) {
+    var kids = list.filter(function(s) { return String(s.period) === p; });
+    html += '<div style="margin-bottom:28px">' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:22px;font-weight:700;color:var(--gold);margin-bottom:12px">Period ' + p + "</div>";
+    skills.forEach(function(sk) {
+      html += '<div class="card" style="margin-bottom:12px">' +
+        '<div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
+        '<div style="font-weight:600">' + sk.name +
+        ' <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(' + (isTimeSkill(sk) ? "sec or mm:ss" : sk.unit) + ")</span></div>" +
+        '<button class="gold" style="margin-left:auto;font-size:12px;padding:5px 12px;width:auto" onclick="saveQuickEditSkill(\'' + sk.id + '\')">Save ' + sk.name + "</button>" +
+        "</div>";
+      kids.forEach(function(s) {
+        var existing = findWeekEntry(s.id, sk.id, week);
+        var shown = existing ? formatTimeValue(existing.value, sk) : "";
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
+          '<div style="flex:1;min-width:120px;font-size:13px;font-weight:500">' + s.first + " " + s.last + "</div>" +
+          '<input class="sp-edit-input" data-qe="1" data-sid="' + s.id + '" data-skid="' + sk.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '" ' +
+          (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"' : 'type="number" step="0.1" placeholder="—"') +
+          ' style="width:130px;text-align:center;font-weight:700;padding:7px 8px"/>' +
+          "</div>";
+      });
+      html += "</div>";
+    });
+    html += "</div>";
+  });
+  var body = document.getElementById("qe-body");
+  if (body) body.innerHTML = html || '<div class="card" style="text-align:center;padding:2rem;color:var(--text2)">No students yet.</div>';
+}
+function saveQuickEditSkill(skid, after) {
+  var week = ((document.getElementById("qe-week") || {}).value || "").trim() || weekLabel();
+  var sk = skills.find(function(s) { return s.id === skid; });
+  var alertBox = document.getElementById("qe-alert");
+  function note(msg, ok) {
+    if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
+  }
+  if (!sk) { if (after) after(new Error("Missing skill")); return; }
+  var inputs = Array.from(document.querySelectorAll('input[data-qe="1"][data-skid="' + skid + '"]'));
+  var rows = [];
+  var parseErr = "";
+  inputs.forEach(function(el) {
+    if (parseErr || !String(el.value).trim()) return;
+    var parsed = parseTimeInput(el.value, sk);
+    if (!parsed.ok) { parseErr = sk.name + ": " + parsed.error; return; }
+    rows.push({ student_id: el.getAttribute("data-sid"), skill_id: skid, value: parsed.value, week_label: week });
+  });
+  if (parseErr) { note(parseErr); if (after) after(new Error(parseErr)); return; }
+  if (!rows.length) { if (after) after(); return; }
+  var saved = 0, failed = 0, firstErr = "";
+  var next = function(i) {
+    if (i >= rows.length) {
+      if (failed) note(saved + " saved, " + failed + " failed — " + firstErr);
+      else note("✓ Saved " + saved + " " + sk.name + " scores", true);
+      if (after) after(failed ? new Error(firstErr) : null);
+      return;
+    }
+    var row = rows[i];
+    var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
+    var finish = function(ok, err, id) {
+      if (!ok) { failed++; if (!firstErr) firstErr = err; }
+      else {
+        saved++;
+        if (!entries[row.student_id]) entries[row.student_id] = {};
+        if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
+        var list = entries[row.student_id][row.skill_id];
+        var found = false;
+        for (var j = 0; j < list.length; j++) {
+          if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, row.week_label))) {
+            list[j].value = row.value; list[j].id = id || list[j].id; found = true; break;
+          }
+        }
+        if (!found) list.push({ id: id, value: row.value, week_label: row.week_label });
+      }
+      next(i + 1);
+    };
+    if (local && local.id) {
+      sb.from("entries").update({ value: row.value }).eq("id", local.id).then(function(r) { finish(!r.error, r.error && r.error.message, local.id); });
+      return;
+    }
+    sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
+      var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
+      if (hit) sb.from("entries").update({ value: row.value }).eq("id", hit.id).then(function(r) { finish(!r.error, r.error && r.error.message, hit.id); });
+      else sb.from("entries").insert([row]).select("id").then(function(r) { finish(!r.error, r.error && r.error.message, r.data && r.data[0] && r.data[0].id); });
+    });
+  };
+  note("Saving " + sk.name + "…", true);
+  next(0);
+}
+function saveQuickEditAll() {
+  var i = 0;
+  var alertBox = document.getElementById("qe-alert");
+  var next = function() {
+    if (i >= skills.length) {
+      if (alertBox) alertBox.innerHTML = '<div class="alert a-ok">✓ All skill sections saved</div>';
+      renderRoster();
+      renderProgress();
+      renderLB();
+      return;
+    }
+    saveQuickEditSkill(skills[i++].id, function() { next(); });
+  };
+  next();
 }
 function goAdminTab(t) {
   ["users","activity","reset"].forEach(function(id) {
