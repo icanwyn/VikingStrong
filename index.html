@@ -539,11 +539,13 @@ tr:hover td{background:rgba(255,255,255,0.03)}
         <div class="row" style="margin-bottom:1.25rem;flex-wrap:wrap;gap:8px">
           <select id="qe-skill" onchange="renderQuickEdit()" style="width:auto"></select>
           <select id="qe-period" onchange="renderQuickEdit()" style="width:auto"><option value="all">All Periods</option></select>
-          <input id="qe-week" onchange="renderQuickEdit()" placeholder="Week" style="width:180px"/>
+          <button type="button" id="qe-week-prev" onclick="shiftRecordWeek(-1)" style="width:auto;padding:7px 10px;font-size:12px" title="Older week">‹ Older</button>
+          <select id="qe-week" onchange="renderQuickEdit()" style="width:auto;min-width:190px"></select>
+          <button type="button" id="qe-week-next" onclick="shiftRecordWeek(1)" style="width:auto;padding:7px 10px;font-size:12px" title="Newer week">Newer ›</button>
           <span id="qe-tag"></span>
         </div>
         <div id="qe-alert"></div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Click a time to add or edit. Use ab (absent), mu (make-up), or inj (injured) if they did not run.</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Pick a past week to fix earlier times. Click a time to add or edit. Use ab, mu, or inj if they did not run.</div>
         <div id="qe-podium" class="podium"></div>
         <div class="card"><div style="overflow-x:auto">
           <table>
@@ -1152,6 +1154,46 @@ function weekMatches(stored, current) {
   if (stored === current) return true;
   var strip = function(s) { return String(s).replace(/,?\s*\d{4}$/, "").trim(); };
   return strip(stored) === strip(current);
+}
+function weekSortValue(label) {
+  var s = String(label || "").trim();
+  var of = s.match(/^Week of\s+(.+)$/i);
+  if (of) {
+    var d = Date.parse(of[1]);
+    if (isNaN(d)) d = Date.parse(of[1] + ", " + new Date().getFullYear());
+    if (!isNaN(d)) return [0, -d, s];
+  }
+  var num = s.match(/^Week\s+(\d+)$/i);
+  if (num) return [1, -Number(num[1]), s];
+  return [2, 0, s];
+}
+function collectWeekLabels() {
+  var weeks = [];
+  function add(w) {
+    if (!w) return;
+    w = String(w).trim();
+    if (!w) return;
+    for (var i = 0; i < weeks.length; i++) {
+      if (weekMatches(weeks[i], w)) return;
+    }
+    weeks.push(w);
+  }
+  add(weekLabel());
+  Object.keys(entries || {}).forEach(function(sid) {
+    var bySkill = entries[sid] || {};
+    Object.keys(bySkill).forEach(function(skid) {
+      (bySkill[skid] || []).forEach(function(e) {
+        if (e && typeof e === "object") add(e.week_label);
+      });
+    });
+  });
+  weeks.sort(function(a, b) {
+    var aa = weekSortValue(a), bb = weekSortValue(b);
+    if (aa[0] !== bb[0]) return aa[0] - bb[0];
+    if (aa[1] !== bb[1]) return aa[1] - bb[1];
+    return String(aa[2]).localeCompare(String(bb[2]));
+  });
+  return weeks;
 }
 function findWeekEntry(sid, skid, week) {
   var list = getEntries(sid, skid);
@@ -4506,8 +4548,26 @@ function goTab(t) {
 }
 function renderQuickEdit() {
   var weekEl = document.getElementById("qe-week");
-  if (weekEl && !weekEl.value) weekEl.value = weekLabel();
-  var week = ((weekEl && weekEl.value) || "").trim() || weekLabel();
+  var weeks = collectWeekLabels();
+  var curWeek = (weekEl && weekEl.value) ? String(weekEl.value).trim() : "";
+  if (!curWeek) curWeek = weekLabel();
+  var found = false;
+  for (var wi = 0; wi < weeks.length; wi++) {
+    if (weekMatches(weeks[wi], curWeek)) { curWeek = weeks[wi]; found = true; break; }
+  }
+  if (!found) weeks.unshift(curWeek);
+  if (weekEl) {
+    weekEl.innerHTML = weeks.map(function(w) {
+      return '<option value="' + String(w).replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '">' + String(w).replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</option>";
+    }).join("");
+    weekEl.value = curWeek;
+  }
+  var weekIdx = weeks.indexOf(curWeek);
+  var prevBtn = document.getElementById("qe-week-prev");
+  var nextBtn = document.getElementById("qe-week-next");
+  if (prevBtn) prevBtn.disabled = weekIdx < 0 || weekIdx >= weeks.length - 1;
+  if (nextBtn) nextBtn.disabled = weekIdx <= 0;
+  var week = curWeek || weekLabel();
   var skSel = document.getElementById("qe-skill");
   var pSel = document.getElementById("qe-period");
   if (skSel) {
@@ -4586,6 +4646,21 @@ function renderQuickEdit() {
   });
   var body = document.getElementById("qe-body");
   if (body) body.innerHTML = rows.length ? rows.join("") : '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:2rem">No students yet.</td></tr>';
+}
+function shiftRecordWeek(dir) {
+  var weekEl = document.getElementById("qe-week");
+  if (!weekEl) return;
+  var weeks = collectWeekLabels();
+  var cur = String(weekEl.value || "").trim() || weekLabel();
+  var idx = -1;
+  for (var i = 0; i < weeks.length; i++) {
+    if (weekMatches(weeks[i], cur)) { idx = i; break; }
+  }
+  if (idx < 0) idx = 0;
+  var next = idx - dir;
+  if (next < 0 || next >= weeks.length) return;
+  weekEl.value = weeks[next];
+  renderQuickEdit();
 }
 function startRecordEdit(sid) {
   var cell = document.getElementById("rec-sc-" + sid);
