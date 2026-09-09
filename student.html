@@ -189,7 +189,7 @@ button.primary{
       </div>
       <div class="card" style="margin-bottom:14px">
         <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:6px">📋 This Week's Scores</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Change a value and save to update. You can only have one score per skill each week.</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Calendar week is Monday–Sunday. Anything you enter this week updates the same score.</div>
         <div id="score-fields"></div>
         <div id="score-alert" style="margin-top:10px"></div>
         <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save / Update scores</button>
@@ -287,14 +287,48 @@ function show(id) {
   if (logBtn) logBtn.classList.toggle("hidden", !onBoard);
   if (id !== "screen-board" && id !== "screen-loading" && id !== "screen-error") lastScreen = id;
 }
-function weekLabel() {
-  return "Week of " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+function startOfCalendarWeek(date) {
+  var src = date ? new Date(date) : new Date();
+  var d = new Date(src.getFullYear(), src.getMonth(), src.getDate());
+  var day = d.getDay();
+  var diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+function formatWeekLabel(date) {
+  var start = startOfCalendarWeek(date);
+  return "Week of " + start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function weekLabel(date) {
+  return formatWeekLabel(date || new Date());
+}
+function parseWeekDate(label) {
+  if (label instanceof Date && !isNaN(label.getTime())) return new Date(label.getFullYear(), label.getMonth(), label.getDate());
+  var s = String(label == null ? "" : label).trim();
+  if (!s) return null;
+  var of = s.match(/^Week of\s+(.+)$/i);
+  var raw = of ? of[1] : s;
+  raw = raw.replace(/\s*[–—-]\s*\d{1,2}(?:,\s*\d{4})?$/, "").trim();
+  var t = Date.parse(raw);
+  if (isNaN(t)) t = Date.parse(raw + ", " + new Date().getFullYear());
+  if (isNaN(t)) return null;
+  var d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function canonicalWeekLabel(label) {
+  var d = parseWeekDate(label);
+  return d ? formatWeekLabel(d) : String(label || "").trim();
+}
+function weekKey(label) {
+  var d = parseWeekDate(label);
+  if (!d) return String(label || "").trim().toLowerCase();
+  var start = startOfCalendarWeek(d);
+  return start.getFullYear() + "-" + String(start.getMonth() + 1).padStart(2, "0") + "-" + String(start.getDate()).padStart(2, "0");
 }
 function weekMatches(stored, current) {
   if (!stored || !current) return false;
   if (stored === current) return true;
-  var strip = function(s) { return String(s).replace(/,?\s*\d{4}$/, "").trim(); };
-  return strip(stored) === strip(current);
+  return weekKey(stored) === weekKey(current);
 }
 function normalizeCode(raw) {
   var s = String(raw == null ? "" : raw).trim().toLowerCase();
@@ -792,7 +826,7 @@ function renderPastScores() {
       list.map(function(e, i) {
         var inputId = "past-" + sk.id + "-" + i;
         return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(30,35,64,0.08)">' +
-          '<div style="font-size:11px;color:var(--text3);min-width:120px">' + (e.week_label || "Earlier") + "</div>" +
+          '<div style="font-size:11px;color:var(--text3);min-width:120px">' + (canonicalWeekLabel(e.week_label) || "Earlier") + "</div>" +
           '<input id="' + inputId + '" value="' + formatTimeValue(e.value, sk).replace(/"/g, "&quot;") + '" ' +
           (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="time or ab/mu/inj"' : 'type="number" step="0.1"') +
           ' style="width:120px;text-align:center;font-size:16px;font-weight:700;padding:8px"/>' +
@@ -842,7 +876,7 @@ function applyLocalEntry(row, id) {
 function upsertScoreRow(row) {
   var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
   function doUpdate(id) {
-    return sb.from("entries").update({ value: row.value }).eq("id", id).then(function(r) {
+    return sb.from("entries").update({ value: row.value, week_label: row.week_label }).eq("id", id).then(function(r) {
       if (r.error) throw r.error;
       applyLocalEntry(row, id);
     });
@@ -863,7 +897,7 @@ function submitScores() {
   var btn = document.getElementById("submit-btn");
   btn.disabled = true;
   btn.textContent = "Saving…";
-  var week = document.getElementById("week-label").textContent || weekLabel();
+  var week = canonicalWeekLabel((document.getElementById("week-label") && document.getElementById("week-label").textContent) || weekLabel());
   var rows = [];
   for (var i = 0; i < skills.length; i++) {
     var sk = skills[i];

@@ -545,7 +545,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
           <span id="qe-tag"></span>
         </div>
         <div id="qe-alert"></div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Pick a past week to fix earlier times. Click a time to add or edit. Use ab, mu, or inj if they did not run.</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Weeks run Monday–Sunday. Anything entered that week counts as that week. Click a time to add or edit. Use ab, mu, or inj if they did not run.</div>
         <div id="qe-podium" class="podium"></div>
         <div class="card"><div style="overflow-x:auto">
           <table>
@@ -624,7 +624,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
               </div>
               <div style="flex:1;min-width:140px">
                 <label class="lbl">Week</label>
-                <input id="grid-week" value="Week 1" style="width:100%" onchange="buildGrid()" oninput="buildGrid()"/>
+                <input id="grid-week" placeholder="Week of …" style="width:100%" onchange="buildGrid()" oninput="buildGrid()"/>
               </div>
             </div>
             <div id="grid-alert"></div>
@@ -1146,23 +1146,62 @@ function getEntries(sid, skid) {
   return (entries[sid] && entries[sid][skid]) ? entries[sid][skid] : [];
 }
 function getLast(sid, skid) { var v = getVals(sid, skid); return v.length ? v[v.length-1] : null; }
-function weekLabel() {
-  return "Week of " + new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+function startOfCalendarWeek(date) {
+  var src = date ? new Date(date) : new Date();
+  var d = new Date(src.getFullYear(), src.getMonth(), src.getDate());
+  var day = d.getDay();
+  var diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+function formatWeekLabel(date) {
+  var start = startOfCalendarWeek(date);
+  return "Week of " + start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function weekLabel(date) {
+  return formatWeekLabel(date || new Date());
+}
+function parseWeekDate(label) {
+  if (label instanceof Date && !isNaN(label.getTime())) return new Date(label.getFullYear(), label.getMonth(), label.getDate());
+  var s = String(label == null ? "" : label).trim();
+  if (!s) return null;
+  var of = s.match(/^Week of\s+(.+)$/i);
+  var raw = of ? of[1] : s;
+  raw = raw.replace(/\s*[–—-]\s*\d{1,2}(?:,\s*\d{4})?$/, "").trim();
+  var t = Date.parse(raw);
+  if (isNaN(t)) t = Date.parse(raw + ", " + new Date().getFullYear());
+  if (isNaN(t)) return null;
+  var d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function canonicalWeekLabel(label) {
+  var d = parseWeekDate(label);
+  return d ? formatWeekLabel(d) : String(label || "").trim();
+}
+function weekKey(label) {
+  var d = parseWeekDate(label);
+  if (!d) return String(label || "").trim().toLowerCase();
+  var start = startOfCalendarWeek(d);
+  return start.getFullYear() + "-" + String(start.getMonth() + 1).padStart(2, "0") + "-" + String(start.getDate()).padStart(2, "0");
 }
 function weekMatches(stored, current) {
   if (!stored || !current) return false;
   if (stored === current) return true;
-  var strip = function(s) { return String(s).replace(/,?\s*\d{4}$/, "").trim(); };
-  return strip(stored) === strip(current);
+  return weekKey(stored) === weekKey(current);
+}
+function weekRangeText(label) {
+  var d = parseWeekDate(label);
+  if (!d) return "";
+  var start = startOfCalendarWeek(d);
+  var end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return start.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+    "–" + end.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 function weekSortValue(label) {
+  var d = parseWeekDate(label);
+  if (d) return [0, -startOfCalendarWeek(d).getTime(), canonicalWeekLabel(label)];
   var s = String(label || "").trim();
-  var of = s.match(/^Week of\s+(.+)$/i);
-  if (of) {
-    var d = Date.parse(of[1]);
-    if (isNaN(d)) d = Date.parse(of[1] + ", " + new Date().getFullYear());
-    if (!isNaN(d)) return [0, -d, s];
-  }
   var num = s.match(/^Week\s+(\d+)$/i);
   if (num) return [1, -Number(num[1]), s];
   return [2, 0, s];
@@ -1171,7 +1210,7 @@ function collectWeekLabels() {
   var weeks = [];
   function add(w) {
     if (!w) return;
-    w = String(w).trim();
+    w = canonicalWeekLabel(w);
     if (!w) return;
     for (var i = 0; i < weeks.length; i++) {
       if (weekMatches(weeks[i], w)) return;
@@ -2649,7 +2688,7 @@ function renderSpEntries(studentId) {
     list.forEach(function(e, i) {
       var val = typeof e === "object" ? e.value : e;
       var eid = typeof e === "object" ? e.id : "";
-      var week = (typeof e === "object" && e.week_label) ? e.week_label : ("Entry " + (i + 1));
+      var week = (typeof e === "object" && e.week_label) ? canonicalWeekLabel(e.week_label) : ("Entry " + (i + 1));
       var inputId = "sp-in-" + i + "-" + sk.id;
       var prevId = "sp-prev-" + i + "-" + sk.id;
       var shown = formatTimeValue(val, sk);
@@ -2909,7 +2948,7 @@ function importScores() {
       student_id: r.student.id,
       skill_id:   r.skill.id,
       value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? storeScoreValue(p.value) : parseFloat(r.value); })(),
-      week_label: r.week
+      week_label: canonicalWeekLabel(r.week || weekLabel())
     };
   });
 
@@ -2979,7 +3018,9 @@ function buildGrid() {
   var tbody = document.getElementById("score-grid-body");
   if (!tbody) return;
 
-  var week = ((document.getElementById("grid-week") || {}).value || "").trim() || "Week 1";
+  var gw = document.getElementById("grid-week");
+  if (gw && !String(gw.value || "").trim()) gw.value = weekLabel();
+  var week = canonicalWeekLabel(((gw && gw.value) || "").trim() || weekLabel());
   tbody.innerHTML = list.map(function(s) {
     var last = getLast(s.id, skid);
     var thisWeek = findWeekEntry(s.id, skid, week);
@@ -3008,7 +3049,7 @@ function clearGrid() {
 
 function saveGrid() {
   var skid = (document.getElementById("grid-skill") || {}).value;
-  var week = (document.getElementById("grid-week")  || {}).value.trim() || "Week 1";
+  var week = canonicalWeekLabel(((document.getElementById("grid-week") || {}).value || "").trim() || weekLabel());
   var sk   = skills.find(function(s) { return s.id === skid; });
   var okEl = document.getElementById("grid-ok");
 
@@ -3057,14 +3098,13 @@ function saveGrid() {
     // Check if entry exists for this week, then update or insert
     (function(row) {
       sb.from("entries")
-        .select("id")
+        .select("id,week_label")
         .eq("student_id", row.student_id)
         .eq("skill_id",   row.skill_id)
-        .eq("week_label", row.week_label)
         .then(function(chk) {
-          var existing = chk.data && chk.data.length > 0;
-          var op = existing
-            ? sb.from("entries").update({ value: row.value }).eq("id", chk.data[0].id)
+          var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
+          var op = hit
+            ? sb.from("entries").update({ value: row.value, week_label: row.week_label }).eq("id", hit.id)
             : sb.from("entries").insert([row]);
           op.then(function(res) {
             if (res.error) {
@@ -3681,7 +3721,7 @@ function renderSpEntries(studentId) {
     list.forEach(function(e, i) {
       var val = typeof e === "object" ? e.value : e;
       var eid = typeof e === "object" ? e.id : "";
-      var week = (typeof e === "object" && e.week_label) ? e.week_label : ("Entry " + (i + 1));
+      var week = (typeof e === "object" && e.week_label) ? canonicalWeekLabel(e.week_label) : ("Entry " + (i + 1));
       var inputId = "sp-in-" + i + "-" + sk.id;
       var prevId = "sp-prev-" + i + "-" + sk.id;
       var shown = formatTimeValue(val, sk);
@@ -3941,7 +3981,7 @@ function importScores() {
       student_id: r.student.id,
       skill_id:   r.skill.id,
       value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? storeScoreValue(p.value) : parseFloat(r.value); })(),
-      week_label: r.week
+      week_label: canonicalWeekLabel(r.week || weekLabel())
     };
   });
 
@@ -4011,7 +4051,9 @@ function buildGrid() {
   var tbody = document.getElementById("score-grid-body");
   if (!tbody) return;
 
-  var week = ((document.getElementById("grid-week") || {}).value || "").trim() || "Week 1";
+  var gw = document.getElementById("grid-week");
+  if (gw && !String(gw.value || "").trim()) gw.value = weekLabel();
+  var week = canonicalWeekLabel(((gw && gw.value) || "").trim() || weekLabel());
   tbody.innerHTML = list.map(function(s) {
     var last = getLast(s.id, skid);
     var thisWeek = findWeekEntry(s.id, skid, week);
@@ -4040,7 +4082,7 @@ function clearGrid() {
 
 function saveGrid() {
   var skid = (document.getElementById("grid-skill") || {}).value;
-  var week = (document.getElementById("grid-week")  || {}).value.trim() || "Week 1";
+  var week = canonicalWeekLabel(((document.getElementById("grid-week") || {}).value || "").trim() || weekLabel());
   var sk   = skills.find(function(s) { return s.id === skid; });
   var okEl = document.getElementById("grid-ok");
 
@@ -4088,14 +4130,13 @@ function saveGrid() {
     }
     // Check if entry exists for this week, then update or insert
     sb.from("entries")
-      .select("id")
+      .select("id,week_label")
       .eq("student_id", rows[i].student_id)
       .eq("skill_id",   rows[i].skill_id)
-      .eq("week_label", rows[i].week_label)
       .then(function(chk) {
-        var existing = chk.data && chk.data.length > 0;
-        var op = existing
-          ? sb.from("entries").update({ value: rows[i].value }).eq("id", chk.data[0].id)
+        var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, rows[i].week_label); });
+        var op = hit
+          ? sb.from("entries").update({ value: rows[i].value, week_label: rows[i].week_label }).eq("id", hit.id)
           : sb.from("entries").insert([rows[i]]);
         op.then(function(res) {
           if (res.error) {
@@ -4549,8 +4590,7 @@ function goTab(t) {
 function renderQuickEdit() {
   var weekEl = document.getElementById("qe-week");
   var weeks = collectWeekLabels();
-  var curWeek = (weekEl && weekEl.value) ? String(weekEl.value).trim() : "";
-  if (!curWeek) curWeek = weekLabel();
+  var curWeek = canonicalWeekLabel((weekEl && weekEl.value) ? String(weekEl.value).trim() : "") || weekLabel();
   var found = false;
   for (var wi = 0; wi < weeks.length; wi++) {
     if (weekMatches(weeks[wi], curWeek)) { curWeek = weeks[wi]; found = true; break; }
@@ -4558,7 +4598,9 @@ function renderQuickEdit() {
   if (!found) weeks.unshift(curWeek);
   if (weekEl) {
     weekEl.innerHTML = weeks.map(function(w) {
-      return '<option value="' + String(w).replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '">' + String(w).replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</option>";
+      var range = weekRangeText(w);
+      var label = range ? w + " (" + range + ")" : w;
+      return '<option value="' + String(w).replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '">' + String(label).replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</option>";
     }).join("");
     weekEl.value = curWeek;
   }
@@ -4666,7 +4708,7 @@ function startRecordEdit(sid) {
   var cell = document.getElementById("rec-sc-" + sid);
   if (!cell || cell.getAttribute("data-editing")) return;
   var skid = (document.getElementById("qe-skill") || {}).value;
-  var week = ((document.getElementById("qe-week") || {}).value || "").trim() || weekLabel();
+  var week = canonicalWeekLabel(((document.getElementById("qe-week") || {}).value || "").trim() || weekLabel());
   var sk = skills.find(function(s) { return s.id === skid; });
   var existing = findWeekEntry(sid, skid, week);
   var shown = existing ? formatTimeValue(existing.value, sk) : "";
@@ -4681,7 +4723,7 @@ function startRecordEdit(sid) {
 }
 function saveRecordEdit(sid) {
   var skid = (document.getElementById("qe-skill") || {}).value;
-  var week = ((document.getElementById("qe-week") || {}).value || "").trim() || weekLabel();
+  var week = canonicalWeekLabel(((document.getElementById("qe-week") || {}).value || "").trim() || weekLabel());
   var sk = skills.find(function(s) { return s.id === skid; });
   var inp = document.getElementById("rec-in-" + sid);
   var alertBox = document.getElementById("qe-alert");
@@ -4699,7 +4741,7 @@ function saveRecordEdit(sid) {
     var found = false;
     for (var j = 0; j < list.length; j++) {
       if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, week))) {
-        list[j].value = parsed.value; list[j].id = id || list[j].id; found = true; break;
+        list[j].value = parsed.value; list[j].id = id || list[j].id; list[j].week_label = week; found = true; break;
       }
     }
     if (!found) list.push({ id: id, value: parsed.value, week_label: week });
@@ -4710,14 +4752,14 @@ function saveRecordEdit(sid) {
   }
   note("Saving…", true);
   if (local && local.id) {
-    sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", local.id).then(function(r) {
+    sb.from("entries").update({ value: storeScoreValue(parsed.value), week_label: week }).eq("id", local.id).then(function(r) {
       if (r.error) note(r.error.message); else done(local.id);
     });
     return;
   }
   sb.from("entries").select("id,week_label").eq("student_id", sid).eq("skill_id", skid).then(function(chk) {
     var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, week); });
-    if (hit) sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", hit.id).then(function(r) {
+    if (hit) sb.from("entries").update({ value: storeScoreValue(parsed.value), week_label: week }).eq("id", hit.id).then(function(r) {
       if (r.error) note(r.error.message); else done(hit.id);
     });
     else sb.from("entries").insert([row]).select("id").then(function(r) {
