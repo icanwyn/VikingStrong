@@ -543,7 +543,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
           <span id="qe-tag"></span>
         </div>
         <div id="qe-alert"></div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Click a score to edit. 1.4 = 1.4 seconds · 1:04 = 1 min 4 sec.</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Click a time to add or edit. Use ab (absent), mu (make-up), or inj (injured) if they did not run.</div>
         <div id="qe-podium" class="podium"></div>
         <div class="card"><div style="overflow-x:auto">
           <table>
@@ -1104,10 +1104,40 @@ function rankBadge(r) {
   if (r === 3) return '<span class="badge b-bronze">#3</span>';
   return '<span style="color:var(--text2)">#' + r + '</span>';
 }
+function normalizeCode(raw) {
+  var s = String(raw == null ? "" : raw).trim().toLowerCase();
+  if (s === "ab" || s === "absent") return "ab";
+  if (s === "mu" || s === "makeup" || s === "make-up" || s === "make up") return "mu";
+  if (s === "inj" || s === "injured" || s === "injury") return "inj";
+  var n = Number(raw);
+  if (n === -9001) return "ab";
+  if (n === -9002) return "mu";
+  if (n === -9003) return "inj";
+  return null;
+}
+function decodeScoreValue(v) {
+  var c = normalizeCode(v);
+  return c || (v === null || v === "" || isNaN(Number(v)) ? v : Number(v));
+}
+function storeScoreValue(v) {
+  var c = normalizeCode(v);
+  if (c === "ab") return -9001;
+  if (c === "mu") return -9002;
+  if (c === "inj") return -9003;
+  return v;
+}
+function isNumericScore(v) {
+  return normalizeCode(v) == null && v !== null && v !== "" && !isNaN(Number(v));
+}
+function codeLabel(code) {
+  if (code === "ab") return "AB";
+  if (code === "mu") return "MU";
+  if (code === "inj") return "INJ";
+  return "";
+}
 function getVals(sid, skid) {
   var raw = (entries[sid] && entries[sid][skid]) ? entries[sid][skid] : [];
-  // Return plain numbers for chart/spark compatibility
-  return raw.map(function(e) { return typeof e === "object" ? e.value : e; });
+  return raw.map(function(e) { return typeof e === "object" ? e.value : e; }).filter(function(v) { return isNumericScore(v); });
 }
 function getEntries(sid, skid) {
   // Return full entry objects {id, value, week_label}
@@ -1141,26 +1171,30 @@ function timeUnitKind(sk) {
 function parseTimeInput(raw, sk) {
   var s = String(raw == null ? "" : raw).trim();
   if (!s) return { ok: false, empty: true };
+  var code = normalizeCode(s);
+  if (code) return { ok: true, value: code, isCode: true };
   if (!isTimeSkill(sk)) {
     var n = parseFloat(s);
-    return isNaN(n) ? { ok: false, empty: false, error: "Enter a number" } : { ok: true, value: n };
+    return isNaN(n) ? { ok: false, empty: false, error: "Enter a number or ab / mu / inj" } : { ok: true, value: n };
   }
   if (s.indexOf(":") >= 0) {
     var parts = s.split(":");
-    if (parts.length !== 2) return { ok: false, empty: false, error: "Use mm:ss (e.g. 6:42)" };
+    if (parts.length !== 2) return { ok: false, empty: false, error: "Enter a time, or ab / mu / inj" };
     var m = parseFloat(parts[0]), sec = parseFloat(parts[1]);
     if (isNaN(m) || isNaN(sec) || m < 0 || sec < 0 || sec >= 60) {
-      return { ok: false, empty: false, error: "Use mm:ss — seconds must be 0–59" };
+      return { ok: false, empty: false, error: "Seconds in mm:ss must be 0–59" };
     }
     var total = m * 60 + sec;
     return { ok: true, value: timeUnitKind(sk) === "min" ? total / 60 : total };
   }
   var n = parseFloat(s);
-  if (isNaN(n) || n < 0) return { ok: false, empty: false, error: "Under 1 min: seconds. Over 1 min: mm:ss" };
+  if (isNaN(n) || n < 0) return { ok: false, empty: false, error: "Enter a time, or ab / mu / inj" };
   return { ok: true, value: timeUnitKind(sk) === "min" ? n / 60 : n };
 }
 function formatTimeValue(value, sk) {
-  if (value == null || isNaN(Number(value))) return "—";
+  var code = normalizeCode(value);
+  if (code) return code;
+  if (value == null || value === "" || isNaN(Number(value))) return "";
   if (!isTimeSkill(sk)) {
     var n = Number(value);
     return n % 1 === 0 ? String(n) : String(Math.round(n * 10) / 10);
@@ -1180,21 +1214,20 @@ function formatTimeValue(value, sk) {
 }
 function formatScore(value, sk) {
   if (value == null || value === "") return "—";
+  var code = normalizeCode(value);
+  if (code) return '<span class="badge b-gray">' + codeLabel(code) + "</span>";
   if (!isTimeSkill(sk)) return formatTimeValue(value, sk) + (sk && sk.unit ? " " + sk.unit : "");
-  var sec = timeUnitKind(sk) === "min" ? Number(value) * 60 : Number(value);
-  return sec < 60 ? formatTimeValue(value, sk) + " sec" : formatTimeValue(value, sk);
+  return formatTimeValue(value, sk);
 }
 function timeMeaning(raw, sk) {
   var p = parseTimeInput(raw, sk);
-  if (p.empty) return "Type a score";
-  if (!p.ok) return p.error || "Invalid";
-  if (!isTimeSkill(sk)) return "Saves as " + formatScore(p.value, sk);
-  var sec = timeUnitKind(sk) === "min" ? p.value * 60 : p.value;
-  var typed = String(raw).indexOf(":") >= 0;
-  if (sec < 60) return "Saves as " + formatTimeValue(p.value, sk) + " seconds  (not mm:ss)";
-  var m = Math.floor(sec / 60);
-  var s = Math.round((sec - m * 60) * 10) / 10;
-  return "Saves as " + formatTimeValue(p.value, sk) + "  (" + m + " min " + s + " sec)" + (typed ? "" : "");
+  if (!p.ok) return p.empty ? "" : (p.error || "");
+  if (p.isCode) {
+    if (p.value === "ab") return "Absent";
+    if (p.value === "mu") return "Make-up";
+    if (p.value === "inj") return "Injured";
+  }
+  return "";
 }
 function scoreFieldAttrs(sk) {
   if (isTimeSkill(sk)) return 'type="text" inputmode="decimal" placeholder="sec or mm:ss" autocomplete="off"';
@@ -1218,7 +1251,7 @@ function getRanked(skid, period) {
   return allStudents()
     .filter(function(s) { return period === "all" || String(s.period) === String(period); })
     .map(function(s) { return Object.assign({}, s, {val: getLast(s.id, skid)}); })
-    .filter(function(s) { return s.val !== null; })
+    .filter(function(s) { return isNumericScore(s.val); })
     .sort(function(a, b) { return sk && sk.lower_better ? a.val - b.val : b.val - a.val; });
 }
 function getRank(sid, skid) {
@@ -1389,7 +1422,7 @@ function loadActiveMerges() {
             var exists = entries[e.student_id][e.skill_id].find(function(x) {
               return typeof x === "object" ? x.id === e.id : false;
             });
-            if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+            if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: decodeScoreValue(e.value), week_label: e.week_label });
           });
           renderLB();
           renderPortalList();
@@ -1479,7 +1512,7 @@ function loadEntries() {
     (r.data || []).forEach(function(e) {
       if (!entries[e.student_id]) entries[e.student_id] = {};
       if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
-      entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+      entries[e.student_id][e.skill_id].push({ id: e.id, value: decodeScoreValue(e.value), week_label: e.week_label });
     });
   });
 }
@@ -1699,7 +1732,7 @@ function renderDash() {
         (existing ? '<span style="font-size:11px;color:var(--gold)">This week — edit to update</span>' : (last !== null ? '<span style="font-size:11px;color:var(--text3)">Last: </span><span style="font-size:12px;font-weight:500;color:var(--gold)">' + formatScore(last, sk) + '</span>' : '<span style="font-size:11px;color:var(--text3)">No entries yet</span>')) +
       '</div></div>' +
       (isTimeSkill(sk)
-        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42" id="ef-' + sk.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '" style="font-size:18px;text-align:center;padding:12px"/><div style="font-size:11px;color:var(--text3);text-align:center;margin-top:4px">Under 1 min: seconds &nbsp;·&nbsp; Over 1 min: mm:ss</div>'
+        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="time" id="ef-' + sk.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '" style="font-size:18px;text-align:center;padding:12px"/>'
         : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="ef-' + sk.id + '" value="' + shown + '" style="font-size:18px;text-align:center;padding:12px"/>') +
       '</div>';
   }).join(""));
@@ -1848,7 +1881,7 @@ function submitScores() {
       alert(sk.name + ": " + parsed.error);
       return;
     }
-    rows.push({student_id: portalStudent.id, skill_id: sk.id, value: parsed.value, week_label: week});
+    rows.push({student_id: portalStudent.id, skill_id: sk.id, value: storeScoreValue(parsed.value), week_label: week});
   }
   if (!rows.length) { btn.disabled = false; btn.textContent = "Submit Scores"; return; }
   var next = function(i) {
@@ -1868,10 +1901,10 @@ function submitScores() {
       var found = false;
       for (var j = 0; j < list.length; j++) {
         if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, row.week_label))) {
-          list[j].value = row.value; list[j].id = id || list[j].id; found = true; break;
+          list[j].value = decodeScoreValue(row.value); list[j].id = id || list[j].id; found = true; break;
         }
       }
-      if (!found) list.push({ id: id, value: row.value, week_label: row.week_label });
+      if (!found) list.push({ id: id, value: decodeScoreValue(row.value), week_label: row.week_label });
       next(i + 1);
     };
     var fail = function(err) {
@@ -2236,7 +2269,7 @@ function toggleMerge(ownerId, active) {
               if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
               // avoid duplicates
               var exists = entries[e.student_id][e.skill_id].find(function(x) { return x.id === e.id; });
-              if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+              if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: decodeScoreValue(e.value), week_label: e.week_label });
             });
             renderLB();
             loadSharePanel(); // refresh UI to show merged badge
@@ -2562,11 +2595,7 @@ function renderSpEntries(studentId) {
     '<div style="font-family:\'Cormorant Garamond\',serif;font-size:16px;font-weight:700;color:var(--gold)">✏️ Edit scores</div>' +
     '</div>' +
     '<div id="sp-edit-alert"></div>' +
-    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">' +
-      'Fix a student mistake here. For times, a decimal is seconds and a colon is minutes:seconds — ' +
-      '<strong style="color:var(--gold2)">1.4</strong> = 1.4 seconds, ' +
-      '<strong style="color:var(--gold2)">1:04</strong> (or 1:4) = 1 minute 4 seconds.' +
-    '</div>';
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">Click a time to fix it. Use ab, mu, or inj if they did not run.</div>';
   var any = false;
   skills.forEach(function(sk) {
     var list = getEntries(s.id, sk.id) || [];
@@ -2586,7 +2615,7 @@ function renderSpEntries(studentId) {
         '<div style="font-size:11px;color:var(--text-muted);min-width:120px">' + week + "</div>" +
         '<input class="sp-edit-input" id="' + inputId + '" value="' + String(shown).replace(/"/g, "&quot;") + '" ' +
           (isTimeSkill(sk)
-            ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"'
+            ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="time or ab/mu/inj"'
             : 'type="number" step="0.1"') +
           ' oninput="teacherPreview(\'' + inputId + '\',\'' + prevId + '\',\'' + sk.id + '\')"' +
           ' style="width:118px;text-align:center;font-size:16px;font-weight:700;padding:8px 10px"/>' +
@@ -2619,7 +2648,7 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
   }
   if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
   note("Saving…", true);
-  sb.from("entries").update({ value: parsed.value }).eq("id", entryId).then(function(r) {
+  sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", entryId).then(function(r) {
     if (r.error) { note("Error: " + r.error.message); return; }
     applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
     openSP(studentId);
@@ -2837,7 +2866,7 @@ function importScores() {
     return {
       student_id: r.student.id,
       skill_id:   r.skill.id,
-      value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? p.value : parseFloat(r.value); })(),
+      value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? storeScoreValue(p.value) : parseFloat(r.value); })(),
       week_label: r.week
     };
   });
@@ -2919,7 +2948,7 @@ function buildGrid() {
         (thisWeek ? '<div style="font-size:11px;color:var(--gold)">This week — edit below</div>' : (last !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(last, sk) + '</div>' : '')) +
         '</div></div></td>' +
       '<td style="color:var(--text2);font-size:13px">P' + s.period + '</td>' +
-      '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
+      '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="time or ab/mu/inj"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
         ' id="grid-' + s.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '"' +
         ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:140px"' +
         ' onkeydown=\"gridKeyNav(event,this)\"/></td>' +
@@ -2952,7 +2981,7 @@ function saveGrid() {
     var sid = el.id.substring(5);
     var student = students.find(function(s) { return s.id === sid; });
     if (!student) return;
-    rows.push({ student_id: sid, skill_id: skid, value: parsed.value, week_label: week });
+    rows.push({ student_id: sid, skill_id: skid, value: storeScoreValue(parsed.value), week_label: week });
   });
   if (parseErr) {
     if (okEl) okEl.innerHTML = '<div class="alert a-err">' + parseErr + '</div>';
@@ -3272,7 +3301,7 @@ function toggleMerge(ownerId, active) {
               if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
               // avoid duplicates
               var exists = entries[e.student_id][e.skill_id].find(function(x) { return x.id === e.id; });
-              if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+              if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: decodeScoreValue(e.value), week_label: e.week_label });
             });
             renderLB();
             loadSharePanel(); // refresh UI to show merged badge
@@ -3598,11 +3627,7 @@ function renderSpEntries(studentId) {
     '<div style="font-family:\'Cormorant Garamond\',serif;font-size:16px;font-weight:700;color:var(--gold)">✏️ Edit scores</div>' +
     '</div>' +
     '<div id="sp-edit-alert"></div>' +
-    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">' +
-      'Fix a student mistake here. For times, a decimal is seconds and a colon is minutes:seconds — ' +
-      '<strong style="color:var(--gold2)">1.4</strong> = 1.4 seconds, ' +
-      '<strong style="color:var(--gold2)">1:04</strong> (or 1:4) = 1 minute 4 seconds.' +
-    '</div>';
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">Click a time to fix it. Use ab, mu, or inj if they did not run.</div>';
   var any = false;
   skills.forEach(function(sk) {
     var list = getEntries(s.id, sk.id) || [];
@@ -3622,7 +3647,7 @@ function renderSpEntries(studentId) {
         '<div style="font-size:11px;color:var(--text-muted);min-width:120px">' + week + "</div>" +
         '<input class="sp-edit-input" id="' + inputId + '" value="' + String(shown).replace(/"/g, "&quot;") + '" ' +
           (isTimeSkill(sk)
-            ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"'
+            ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="time or ab/mu/inj"'
             : 'type="number" step="0.1"') +
           ' oninput="teacherPreview(\'' + inputId + '\',\'' + prevId + '\',\'' + sk.id + '\')"' +
           ' style="width:118px;text-align:center;font-size:16px;font-weight:700;padding:8px 10px"/>' +
@@ -3655,7 +3680,7 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
   }
   if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
   note("Saving…", true);
-  sb.from("entries").update({ value: parsed.value }).eq("id", entryId).then(function(r) {
+  sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", entryId).then(function(r) {
     if (r.error) { note("Error: " + r.error.message); return; }
     applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
     openSP(studentId);
@@ -3873,7 +3898,7 @@ function importScores() {
     return {
       student_id: r.student.id,
       skill_id:   r.skill.id,
-      value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? p.value : parseFloat(r.value); })(),
+      value:      (function(){ var p = parseTimeInput(r.value, r.skill); return p.ok ? storeScoreValue(p.value) : parseFloat(r.value); })(),
       week_label: r.week
     };
   });
@@ -3955,7 +3980,7 @@ function buildGrid() {
         (thisWeek ? '<div style="font-size:11px;color:var(--gold)">This week — edit below</div>' : (last !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + formatScore(last, sk) + '</div>' : '')) +
         '</div></div></td>' +
       '<td style="color:var(--text2);font-size:13px">P' + s.period + '</td>' +
-      '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="47.2 or 6:42"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
+      '<td><input ' + (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="time or ab/mu/inj"' : 'type="number" step="0.1" inputmode="decimal" placeholder="—"') +
         ' id="grid-' + s.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '"' +
         ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:140px"' +
         ' onkeydown=\"gridKeyNav(event,this)\"/></td>' +
@@ -3988,7 +4013,7 @@ function saveGrid() {
     var sid = el.id.substring(5);
     var student = students.find(function(s) { return s.id === sid; });
     if (!student) return;
-    rows.push({ student_id: sid, skill_id: skid, value: parsed.value, week_label: week });
+    rows.push({ student_id: sid, skill_id: skid, value: storeScoreValue(parsed.value), week_label: week });
   });
   if (parseErr) {
     if (okEl) okEl.innerHTML = '<div class="alert a-err">' + parseErr + '</div>';
@@ -4130,9 +4155,9 @@ function handleDeleteClick(btn) {
 function editEntry(entryId, skid, currentValue, weekLabel) {
   var sk = skills.find(function(x) { return x.id === skid; });
   var newVal = prompt(
-    "Edit " + (sk ? sk.name : "score") + " [" + weekLabel + "]\nCurrent: " + formatScore(currentValue, sk) +
-    (isTimeSkill(sk) ? "\n\n1.4 = 1.4 seconds\n1:04 or 1:4 = 1 minute 4 seconds" : ""),
-    isTimeSkill(sk) ? formatTimeValue(currentValue, sk) : currentValue
+    "Edit " + (sk ? sk.name : "score") + " [" + weekLabel + "]\nCurrent: " + formatTimeValue(currentValue, sk) +
+    "\n\nEnter a time, or ab / mu / inj",
+    isTimeSkill(sk) ? formatTimeValue(currentValue, sk) : (currentValue == null ? "" : currentValue)
   );
   if (newVal === null || newVal.trim() === "") return;
   var parsedIn = parseTimeInput(newVal, sk);
@@ -4140,7 +4165,7 @@ function editEntry(entryId, skid, currentValue, weekLabel) {
   var parsed = parsedIn.value;
 
   alertEl("edit-alert", "Saving…", "ok");
-  sb.from("entries").update({ value: parsed }).eq("id", entryId).then(function(r) {
+  sb.from("entries").update({ value: storeScoreValue(parsed) }).eq("id", entryId).then(function(r) {
     if (r.error) { alertEl("edit-alert", "Error: " + r.error.message); return; }
     // Update local cache
     var raw = entries[portalStudent.id] && entries[portalStudent.id][skid];
@@ -4264,7 +4289,7 @@ function debugAndReloadMerge() {
           var exists = entries[e.student_id][e.skill_id].find(function(x) {
             return typeof x === "object" && x.id === e.id;
           });
-          if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+          if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: decodeScoreValue(e.value), week_label: e.week_label });
         });
         renderAll();
         loadSharePanel();
@@ -4511,14 +4536,17 @@ function renderQuickEdit() {
 
   var pool = period === "all" ? allStudents() : allStudents().filter(function(s) { return String(s.period) === String(period); });
   var ranked = [];
+  var coded = [];
   var rest = [];
   pool.forEach(function(s) {
     var existing = findWeekEntry(s.id, skid, week);
-    var val = existing ? existing.value : getLast(s.id, skid);
-    if (val === null || val === undefined) rest.push(s);
-    else ranked.push(Object.assign({}, s, { val: val, weekVal: existing ? existing.value : null }));
+    var val = existing ? existing.value : null;
+    if (val === null || val === undefined || val === "") rest.push(Object.assign({}, s, { val: null }));
+    else if (normalizeCode(val)) coded.push(Object.assign({}, s, { val: val }));
+    else ranked.push(Object.assign({}, s, { val: val }));
   });
   ranked.sort(function(a, b) { return sk && sk.lower_better ? a.val - b.val : b.val - a.val; });
+  coded.sort(function(a, b) { return String(a.last).localeCompare(String(b.last)); });
   rest.sort(function(a, b) { return String(a.last).localeCompare(String(b.last)); });
 
   var podium = document.getElementById("qe-podium");
@@ -4548,12 +4576,12 @@ function renderQuickEdit() {
       "<td>" + spark(getVals(s.id, skid), sk && sk.lower_better) + "</td>" +
       "<td>" + (imp ? '<span style="color:' + (imp.ok?"var(--gold)":"var(--red)") + ';font-size:12px">' + (imp.ok?"▲":"▼") + " " + imp.pct + "%</span>" : "—") + "</td></tr>";
   });
-  rest.forEach(function(s) {
+  coded.concat(rest).forEach(function(s) {
     rows.push("<tr>" +
       "<td>—</td>" +
       '<td><div class="row">' + avHTML(s.first, s.last, 26) + "<span>" + s.first + " " + s.last + "</span></div></td>" +
       '<td style="color:var(--text2)">P' + s.period + "</td>" +
-      '<td id="rec-sc-' + s.id + '" style="font-weight:600;color:var(--text-muted);cursor:pointer" title="Click to add" onclick="startRecordEdit(\'' + s.id + '\')">—</td>' +
+      '<td id="rec-sc-' + s.id + '" style="font-weight:700;cursor:pointer" title="Click to add or edit" onclick="startRecordEdit(\'' + s.id + '\')">' + (s.val != null ? formatScore(s.val, sk) : '<span style="color:var(--text3);font-weight:500">+ add</span>') + "</td>" +
       "<td>—</td><td>—</td></tr>");
   });
   var body = document.getElementById("qe-body");
@@ -4570,9 +4598,8 @@ function startRecordEdit(sid) {
   cell.setAttribute("data-editing", "1");
   cell.onclick = null;
   cell.innerHTML = '<div style="display:flex;align-items:center;gap:6px">' +
-    '<input class="sp-edit-input" id="rec-in-' + sid + '" value="' + String(shown).replace(/"/g, "&quot;") + '" ' +
-    (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"' : 'type="number" step="0.1" placeholder="—"') +
-    ' style="width:110px;text-align:center;font-weight:700;padding:6px 8px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveRecordEdit(\'' + sid + '\');}if(event.key===\'Escape\')renderQuickEdit()"/>' +
+    '<input class="sp-edit-input" id="rec-in-' + sid + '" value="' + String(shown).replace(/"/g, "&quot;") + '" type="text" autocomplete="off" placeholder="time or ab/mu/inj"' +
+    ' style="width:120px;text-align:center;font-weight:700;padding:6px 8px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveRecordEdit(\'' + sid + '\');}if(event.key===\'Escape\')renderQuickEdit()"/>' +
     '<button class="gold" style="width:auto;padding:5px 10px;font-size:12px" onclick="event.stopPropagation();saveRecordEdit(\'' + sid + '\')">Save</button></div>';
   var inp = document.getElementById("rec-in-" + sid);
   if (inp) { inp.focus(); inp.select(); }
@@ -4588,7 +4615,7 @@ function saveRecordEdit(sid) {
   }
   var parsed = parseTimeInput(inp && inp.value, sk);
   if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
-  var row = { student_id: sid, skill_id: skid, value: parsed.value, week_label: week };
+  var row = { student_id: sid, skill_id: skid, value: storeScoreValue(parsed.value), week_label: week };
   var local = findWeekEntry(sid, skid, week);
   function done(id) {
     if (!entries[sid]) entries[sid] = {};
@@ -4608,14 +4635,14 @@ function saveRecordEdit(sid) {
   }
   note("Saving…", true);
   if (local && local.id) {
-    sb.from("entries").update({ value: parsed.value }).eq("id", local.id).then(function(r) {
+    sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", local.id).then(function(r) {
       if (r.error) note(r.error.message); else done(local.id);
     });
     return;
   }
   sb.from("entries").select("id,week_label").eq("student_id", sid).eq("skill_id", skid).then(function(chk) {
     var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, week); });
-    if (hit) sb.from("entries").update({ value: parsed.value }).eq("id", hit.id).then(function(r) {
+    if (hit) sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", hit.id).then(function(r) {
       if (r.error) note(r.error.message); else done(hit.id);
     });
     else sb.from("entries").insert([row]).select("id").then(function(r) {

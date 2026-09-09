@@ -208,7 +208,7 @@ button.primary{
     <div id="pane-goals" class="hidden">
       <div class="card" style="margin-bottom:14px">
         <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:6px">🎯 My Goals</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Set a target for each skill. Times: 1.4 = seconds, 1:04 = 1 min 4 sec.</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Set a target for each skill.</div>
         <div id="stu-goals-fields"></div>
         <button class="primary" onclick="saveStuGoals()" style="margin-top:8px">Save Goals</button>
         <div id="stu-goals-ok" class="hidden alert alert-success" style="margin-top:10px">✓ Goals saved!</div>
@@ -296,11 +296,42 @@ function weekMatches(stored, current) {
   var strip = function(s) { return String(s).replace(/,?\s*\d{4}$/, "").trim(); };
   return strip(stored) === strip(current);
 }
+function normalizeCode(raw) {
+  var s = String(raw == null ? "" : raw).trim().toLowerCase();
+  if (s === "ab" || s === "absent") return "ab";
+  if (s === "mu" || s === "makeup" || s === "make-up" || s === "make up") return "mu";
+  if (s === "inj" || s === "injured" || s === "injury") return "inj";
+  var n = Number(raw);
+  if (n === -9001) return "ab";
+  if (n === -9002) return "mu";
+  if (n === -9003) return "inj";
+  return null;
+}
+function decodeScoreValue(v) {
+  var c = normalizeCode(v);
+  return c || (v === null || v === "" || isNaN(Number(v)) ? v : Number(v));
+}
+function storeScoreValue(v) {
+  var c = normalizeCode(v);
+  if (c === "ab") return -9001;
+  if (c === "mu") return -9002;
+  if (c === "inj") return -9003;
+  return v;
+}
+function isNumericScore(v) {
+  return normalizeCode(v) == null && v !== null && v !== "" && !isNaN(Number(v));
+}
+function codeLabel(code) {
+  if (code === "ab") return "AB";
+  if (code === "mu") return "MU";
+  if (code === "inj") return "INJ";
+  return "";
+}
 function getEntries(sid, skid) {
   return (entries[sid] && entries[sid][skid]) ? entries[sid][skid] : [];
 }
 function getVals(sid, skid) {
-  return getEntries(sid, skid).map(function(e) { return typeof e === "object" ? e.value : e; });
+  return getEntries(sid, skid).map(function(e) { return typeof e === "object" ? e.value : e; }).filter(function(v) { return isNumericScore(v); });
 }
 function getLastVal(sid, skid) {
   var v = getVals(sid, skid);
@@ -324,26 +355,30 @@ function timeUnitKind(sk) {
 function parseTimeInput(raw, sk) {
   var s = String(raw == null ? "" : raw).trim();
   if (!s) return { ok: false, empty: true };
+  var code = normalizeCode(s);
+  if (code) return { ok: true, value: code, isCode: true };
   if (!isTimeSkill(sk)) {
     var n = parseFloat(s);
-    return isNaN(n) ? { ok: false, empty: false, error: "Enter a number" } : { ok: true, value: n };
+    return isNaN(n) ? { ok: false, empty: false, error: "Enter a number or ab / mu / inj" } : { ok: true, value: n };
   }
   if (s.indexOf(":") >= 0) {
     var parts = s.split(":");
-    if (parts.length !== 2) return { ok: false, empty: false, error: "Use mm:ss (e.g. 6:42)" };
+    if (parts.length !== 2) return { ok: false, empty: false, error: "Enter a time, or ab / mu / inj" };
     var m = parseFloat(parts[0]), sec = parseFloat(parts[1]);
     if (isNaN(m) || isNaN(sec) || m < 0 || sec < 0 || sec >= 60) {
-      return { ok: false, empty: false, error: "Use mm:ss — seconds must be 0–59" };
+      return { ok: false, empty: false, error: "Seconds in mm:ss must be 0–59" };
     }
     var total = m * 60 + sec;
     return { ok: true, value: timeUnitKind(sk) === "min" ? total / 60 : total };
   }
   var n = parseFloat(s);
-  if (isNaN(n) || n < 0) return { ok: false, empty: false, error: "Under 1 min: seconds. Over 1 min: mm:ss" };
+  if (isNaN(n) || n < 0) return { ok: false, empty: false, error: "Enter a time, or ab / mu / inj" };
   return { ok: true, value: timeUnitKind(sk) === "min" ? n / 60 : n };
 }
 function formatTimeValue(value, sk) {
-  if (value == null || isNaN(Number(value))) return "—";
+  var code = normalizeCode(value);
+  if (code) return code;
+  if (value == null || value === "" || isNaN(Number(value))) return "";
   if (!isTimeSkill(sk)) {
     var n = Number(value);
     return n % 1 === 0 ? String(n) : String(Math.round(n * 10) / 10);
@@ -363,34 +398,10 @@ function formatTimeValue(value, sk) {
 }
 function formatScore(value, sk) {
   if (value == null || value === "") return "—";
+  var code = normalizeCode(value);
+  if (code) return '<span class="badge badge-gray">' + codeLabel(code) + "</span>";
   if (!isTimeSkill(sk)) return formatTimeValue(value, sk) + (sk && sk.unit ? " " + sk.unit : "");
-  var sec = timeUnitKind(sk) === "min" ? Number(value) * 60 : Number(value);
-  return sec < 60 ? formatTimeValue(value, sk) + " sec" : formatTimeValue(value, sk);
-}
-function showTimeHint(input, skid) {
-  var sk = skills.find(function(x) { return x.id === skid; });
-  var hint = document.getElementById("thint-" + skid);
-  if (!hint) return;
-  var raw = input.value;
-  if (!String(raw).trim()) {
-    hint.textContent = "1.4 = 1.4 seconds   ·   1:04 = 1 minute 4 seconds";
-    hint.style.color = "";
-    return;
-  }
-  var p = parseTimeInput(raw, sk);
-  if (!p.ok) {
-    hint.textContent = p.error;
-    hint.style.color = "#C0392B";
-    return;
-  }
-  var sec = timeUnitKind(sk) === "min" ? p.value * 60 : p.value;
-  hint.style.color = "#8B6A30";
-  if (sec < 60) hint.textContent = "This will save as " + formatTimeValue(p.value, sk) + " seconds (not mm:ss)";
-  else {
-    var m = Math.floor(sec / 60);
-    var s = Math.round((sec - m * 60) * 10) / 10;
-    hint.textContent = "This will save as " + formatTimeValue(p.value, sk) + "  (" + m + " min " + s + " sec)";
-  }
+  return formatTimeValue(value, sk);
 }
 function getImp(sid, skid) {
   var v = getVals(sid, skid);
@@ -403,7 +414,7 @@ function getRanked(skid, period) {
   var sk = skills.find(function(s) { return s.id === skid; });
   var list = (!period || period === "all") ? students : students.filter(function(s) { return String(s.period) === String(period); });
   return list.map(function(s) { return Object.assign({}, s, { val: getLastVal(s.id, skid) }); })
-    .filter(function(s) { return s.val !== null; })
+    .filter(function(s) { return isNumericScore(s.val); })
     .sort(function(a, b) { return sk && sk.lower_better ? a.val - b.val : b.val - a.val; });
 }
 function getRank(sid, skid) {
@@ -483,7 +494,7 @@ function bootStudent() {
       (er.data || []).forEach(function(e) {
         if (!entries[e.student_id]) entries[e.student_id] = {};
         if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
-        entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+        entries[e.student_id][e.skill_id].push({ id: e.id, value: decodeScoreValue(e.value), week_label: e.week_label });
       });
       var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
       var pf = document.getElementById("s-period");
@@ -576,7 +587,7 @@ function renderStuGoals() {
         (best !== null ? 'Best: <strong style="color:var(--gold3)">' + formatScore(best, sk) + "</strong>" : "") +
         "</div></div>" +
         (isTimeSkill(sk)
-          ? '<input type="text" inputmode="decimal" autocomplete="off" id="sg-' + sk.id + '" placeholder="1.4 or 1:04" value="' + (goals[sk.id] != null ? formatTimeValue(goals[sk.id], sk) : "") + '" style="font-size:16px;text-align:center;padding:10px"/>'
+          ? '<input type="text" inputmode="decimal" autocomplete="off" id="sg-' + sk.id + '" placeholder="time" value="' + (goals[sk.id] != null ? formatTimeValue(goals[sk.id], sk) : "") + '" style="font-size:16px;text-align:center;padding:10px"/>'
           : '<input type="number" step="0.1" inputmode="decimal" id="sg-' + sk.id + '" placeholder="Set your ' + sk.name + ' goal…" value="' + (goals[sk.id] != null ? goals[sk.id] : "") + '" style="font-size:16px;text-align:center;padding:10px"/>') +
         "</div>";
     }).join("");
@@ -755,7 +766,7 @@ function loadScoreScreen() {
       '<div style="font-size:12px;color:var(--text2)">' + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + " · " + (isTimeSkill(sk) ? "time" : sk.unit) + "</div></div>" +
       '<div style="text-align:right">' + status + "</div></div>" +
       (isTimeSkill(sk)
-        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04" id="sf-' + sk.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '" style="font-size:24px;text-align:center;padding:14px" oninput="showTimeHint(this,\'' + sk.id + '\')"/><div id="thint-' + sk.id + '" style="font-size:12px;color:var(--text3);text-align:center;margin-top:6px">1.4 = 1.4 seconds &nbsp;·&nbsp; 1:04 = 1 minute 4 seconds</div>'
+        ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="time or ab/mu/inj" id="sf-' + sk.id + '" value="' + String(shown).replace(/"/g, "&quot;") + '" style="font-size:24px;text-align:center;padding:14px"/>'
         : '<input type="number" step="0.1" inputmode="decimal" placeholder="Enter ' + sk.unit + '…" id="sf-' + sk.id + '" value="' + shown + '" style="font-size:24px;text-align:center;padding:14px"/>') +
       "</div>";
   }).join("");
@@ -783,7 +794,7 @@ function renderPastScores() {
         return '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(30,35,64,0.08)">' +
           '<div style="font-size:11px;color:var(--text3);min-width:120px">' + (e.week_label || "Earlier") + "</div>" +
           '<input id="' + inputId + '" value="' + formatTimeValue(e.value, sk).replace(/"/g, "&quot;") + '" ' +
-          (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="1.4 or 1:04"' : 'type="number" step="0.1"') +
+          (isTimeSkill(sk) ? 'type="text" inputmode="decimal" autocomplete="off" placeholder="time or ab/mu/inj"' : 'type="number" step="0.1"') +
           ' style="width:120px;text-align:center;font-size:16px;font-weight:700;padding:8px"/>' +
           '<button class="primary" style="width:auto;padding:7px 12px;font-size:12px" onclick="savePastScore(\'' + e.id + '\',\'' + sk.id + '\',\'' + inputId + '\')">Update</button></div>';
       }).join("") + "</div>";
@@ -799,7 +810,7 @@ function savePastScore(entryId, skid, inputId) {
     if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + (parsed.error || "Invalid score") + "</div>";
     return;
   }
-  sb.from("entries").update({ value: parsed.value }).eq("id", entryId).then(function(r) {
+  sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", entryId).then(function(r) {
     if (r.error) {
       if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + r.error.message + "</div>";
       return;
@@ -819,14 +830,14 @@ function applyLocalEntry(row, id) {
   var found = false;
   for (var i = 0; i < list.length; i++) {
     if (typeof list[i] === "object" && (list[i].id === id || weekMatches(list[i].week_label, row.week_label))) {
-      list[i].value = row.value;
+      list[i].value = decodeScoreValue(row.value);
       list[i].id = id || list[i].id;
       list[i].week_label = row.week_label;
       found = true;
       break;
     }
   }
-  if (!found) list.push({ id: id, value: row.value, week_label: row.week_label });
+  if (!found) list.push({ id: id, value: decodeScoreValue(row.value), week_label: row.week_label });
 }
 function upsertScoreRow(row) {
   var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
@@ -865,7 +876,7 @@ function submitScores() {
       btn.textContent = "Save / Update scores";
       return;
     }
-    rows.push({ student_id: selectedStudent.id, skill_id: sk.id, value: parsed.value, week_label: week });
+    rows.push({ student_id: selectedStudent.id, skill_id: sk.id, value: storeScoreValue(parsed.value), week_label: week });
   }
   if (!rows.length) {
     document.getElementById("score-alert").innerHTML = '<div class="alert alert-error">Enter at least one score before saving.</div>';
