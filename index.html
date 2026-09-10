@@ -446,7 +446,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
       <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;letter-spacing:.06em">
         <span style="background:linear-gradient(135deg,#D4AF72,#B8924A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">VIKINGSTRONG</span>
       </div>
-      <div id="login-sub" style="font-size:11px;color:#8090A8;margin-top:4px;letter-spacing:.1em;text-transform:uppercase">Teacher Sign In</div>
+      <div id="login-sub" style="font-size:11px;color:#8090A8;margin-top:4px;letter-spacing:.1em;text-transform:uppercase">Teacher / TA Sign In</div>
     </div>
     <div id="login-alert"></div>
     <div id="signup-fields" class="hidden">
@@ -501,17 +501,18 @@ tr:hover td{background:rgba(255,255,255,0.03)}
         <div class="tabs">
           <button class="tab on" id="tab-roster"   onclick="goTab('roster')">Roster</button>
           <button class="tab"    id="tab-quickedit" onclick="goTab('quickedit')">Record</button>
-          <button class="tab"    id="tab-upload"   onclick="goTab('upload')">CSV Upload</button>
-          <button class="tab"    id="tab-add"      onclick="goTab('add')">Add Student</button>
+          <button class="tab teacher-only"    id="tab-upload"   onclick="goTab('upload')">CSV Upload</button>
+          <button class="tab teacher-only"    id="tab-add"      onclick="goTab('add')">Add Student</button>
           <button class="tab"    id="tab-scores"   onclick="goTab('scores')">⬆ Upload Scores</button>
           <button class="tab"    id="tab-progress" onclick="goTab('progress')">Progress</button>
-          <button class="tab"    id="tab-skills"   onclick="goTab('skills')">Skills</button>
-          <button class="tab"    id="tab-share"    onclick="goTab('share')">Share</button>
+          <button class="tab teacher-only"    id="tab-skills"   onclick="goTab('skills')">Skills</button>
+          <button class="tab teacher-only"    id="tab-share"    onclick="goTab('share')">Share</button>
+          <button class="tab teacher-only"    id="tab-assistants" onclick="goTab('assistants')">Assistants</button>
         </div>
         <div style="display:flex;gap:6px">
-          <button onclick="openQR()"           style="flex:1;font-size:12px;padding:7px 10px">📱 QR Codes</button>
-          <button onclick="openStickerSheet()" style="flex:1;font-size:12px;padding:7px 10px">🏷️ Stickers</button>
-          <button onclick="openEmail()"        style="flex:1;font-size:12px;padding:7px 10px">✉ Email Codes</button>
+          <button class="teacher-only" onclick="openQR()"           style="flex:1;font-size:12px;padding:7px 10px">📱 QR Codes</button>
+          <button class="teacher-only" onclick="openStickerSheet()" style="flex:1;font-size:12px;padding:7px 10px">🏷️ Stickers</button>
+          <button class="teacher-only" onclick="openEmail()"        style="flex:1;font-size:12px;padding:7px 10px">✉ Email Codes</button>
           <button onclick="loadData()"         style="flex:1;font-size:12px;padding:7px 10px">↻ Refresh</button>
         </div>
       </div>
@@ -524,7 +525,7 @@ tr:hover td{background:rgba(255,255,255,0.03)}
           </select>
           <span id="roster-count" style="font-size:13px;color:var(--text2)"></span>
           <span style="font-size:12px;color:var(--text3)">Click a name to view and edit scores</span>
-          <button onclick="resetPeriodCodes(event)" style="margin-left:auto;font-size:12px;padding:5px 12px;color:var(--gold);background:var(--gold-glow);border-color:rgba(201,168,76,.3)">↻ Reset Period Codes</button>
+          <button class="teacher-only" onclick="resetPeriodCodes(event)" style="margin-left:auto;font-size:12px;padding:5px 12px;color:var(--gold);background:var(--gold-glow);border-color:rgba(201,168,76,.3)">↻ Reset Period Codes</button>
         </div>
         <div style="overflow-x:auto">
           <table>
@@ -745,6 +746,25 @@ tr:hover td{background:rgba(255,255,255,0.03)}
               <div id="absorb-list"></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- ASSISTANTS -->
+      <div id="pane-assistants" class="hidden">
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:6px">🧑‍🏫 Teacher Assistants</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Create a login so a TA can enter times on Record. They can edit scores, not the roster or skills. First time only: run <span class="mono">supabase/teacher-assistants.sql</span> in the Supabase SQL editor.</div>
+          <div id="ta-alert"></div>
+          <div class="grid2">
+            <div><label class="lbl">Name</label><input id="ta-name" placeholder="Assistant name"/></div>
+            <div><label class="lbl">Email</label><input id="ta-email" type="email" placeholder="ta@school.edu"/></div>
+            <div class="full"><label class="lbl">Password</label><input id="ta-pass" type="password" placeholder="At least 6 characters"/></div>
+          </div>
+          <button onclick="createTA()" class="gold" style="margin-top:12px">Create TA login</button>
+        </div>
+        <div class="card">
+          <div style="font-weight:600;font-size:14px;margin-bottom:10px">Current assistants</div>
+          <div id="ta-list" style="font-size:13px;color:var(--text2)">None yet.</div>
         </div>
       </div>
     </div>
@@ -1024,6 +1044,7 @@ var ADMIN_EMAIL = "chuynh@lasdschools.org";
           showErr(cfg.error || "Supabase env vars are missing. Add SUPABASE_URL and SUPABASE_ANON_KEY in Vercel.");
           return;
         }
+        SB_KEY = cfg.key;
         window.sb = window.supabase.createClient(location.origin + "/api/supabase", cfg.key);
         boot();
       })
@@ -1043,7 +1064,8 @@ function showErr(msg) {
 }
 
 // ── State ────────────────────────────────────────────────────
-var ME = null, profile = null;
+var ME = null, profile = null, SB_KEY = null;
+var isTA = false, taOwnerId = null, taRow = null;
 var students = [], skills = [], entries = {};
 var csvRows = [], sentEmails = [], portalStudent = null;
 var adminUsers = [], skLowerBetter = false, isSignup = false;
@@ -1348,6 +1370,22 @@ function getRank(sid, skid) {
 function isAdmin() {
   return ME && ME.email === ADMIN_EMAIL;
 }
+function ownerId() {
+  return isTA && taOwnerId ? taOwnerId : (ME && ME.id);
+}
+function applyRoleUI() {
+  document.querySelectorAll(".teacher-only").forEach(function(el) {
+    if (isTA) el.classList.add("hidden");
+    else el.classList.remove("hidden");
+  });
+  var navStu = document.getElementById("nav-student");
+  if (navStu) navStu.classList.toggle("hidden", !!isTA);
+  var navT = document.getElementById("nav-teacher");
+  if (navT) navT.textContent = isTA ? "🏫 Class" : "🏫 Teacher";
+  var schoolInp = document.getElementById("p-school");
+  if (schoolInp) schoolInp.disabled = !!isTA;
+  if (isTA) goTab("quickedit");
+}
 function syncPeriods(selectIds) {
   var periods = Array.from(new Set(allStudents().map(function(s) { return s.period; }))).sort();
   selectIds.forEach(function(id) {
@@ -1464,11 +1502,29 @@ function bootApp(user) {
     document.getElementById("nav-admin").classList.remove("hidden");
     console.log("Admin tab shown");
   }
-  loadProfile().then(function() {
+  detectTA().then(function() {
+    applyRoleUI();
+    return loadProfile();
+  }).then(function() {
     return loadData();
   }).then(function() {
-    // Auto-load any active merged rosters on login
-    return loadActiveMerges();
+    return isTA ? Promise.resolve() : loadActiveMerges();
+  });
+}
+function detectTA() {
+  isTA = false;
+  taOwnerId = null;
+  taRow = null;
+  return sb.from("teacher_assistants").select("*").eq("user_id", ME.id).then(function(r) {
+    if (r.error) {
+      console.log("TA lookup:", r.error.message);
+      return;
+    }
+    var row = (r.data && r.data[0]) || null;
+    if (!row) return;
+    isTA = true;
+    taRow = row;
+    taOwnerId = row.owner_teacher_id;
   });
 }
 
@@ -1520,15 +1576,22 @@ function loadActiveMerges() {
 
 // ── PROFILE ──────────────────────────────────────────────────
 function loadProfile() {
-  return sb.from("teachers").select("*").eq("id", ME.id).single().then(function(r) {
-    profile = r.data || {};
+  var tid = ownerId();
+  return sb.from("teachers").select("*").eq("id", tid).then(function(r) {
+    profile = (r.data && r.data[0]) || {};
     updateHdrSub();
-    document.getElementById("p-name").value   = profile.name   || "";
+    document.getElementById("p-name").value   = isTA ? ((taRow && taRow.name) || "") : (profile.name || "");
     document.getElementById("p-school").value = profile.school || "";
     document.getElementById("p-email").value  = ME.email;
   });
 }
 function updateHdrSub() {
+  if (isTA) {
+    var taName = (taRow && taRow.name) ? taRow.name : ME.email;
+    var school = (profile && profile.school) ? " · " + profile.school : "";
+    document.getElementById("hdr-sub").textContent = "TA · " + taName + school;
+    return;
+  }
   var n = (profile && profile.name) ? profile.name : ME.email;
   var s = (profile && profile.school) ? " · " + profile.school : "";
   document.getElementById("hdr-sub").textContent = n + s;
@@ -1536,6 +1599,16 @@ function updateHdrSub() {
 function saveProfile() {
   var name   = document.getElementById("p-name").value.trim();
   var school = document.getElementById("p-school").value.trim();
+  if (isTA) {
+    sb.from("teacher_assistants").update({ name: name }).eq("user_id", ME.id).then(function(r) {
+      if (r.error) { alertEl("profile-alert", r.error.message); return; }
+      if (taRow) taRow.name = name;
+      updateHdrSub();
+      alertEl("profile-alert", "✓ Profile saved!", "ok");
+      setTimeout(function() { alertEl("profile-alert", ""); }, 3000);
+    });
+    return;
+  }
   sb.from("teachers").upsert([{id: ME.id, email: ME.email, name: name, school: school}], {onConflict: "id"}).then(function(r) {
     if (r.error) { alertEl("profile-alert", r.error.message); return; }
     profile = Object.assign({}, profile, {name: name, school: school});
@@ -1563,20 +1636,22 @@ function renderProfileStats() {
 // ── LOAD DATA ────────────────────────────────────────────────
 function loadData() {
   if (!ME) return Promise.resolve();
+  var tid = ownerId();
+  if (!tid) return Promise.resolve();
   return Promise.all([
-    sb.from("students").select("*").eq("teacher_id", ME.id).order("last"),
-    sb.from("skills").select("*").eq("teacher_id", ME.id).order("created_at")
+    sb.from("students").select("*").eq("teacher_id", tid).order("last"),
+    sb.from("skills").select("*").eq("teacher_id", tid).order("created_at")
   ]).then(function(results) {
     students = results[0].data || [];
     skills   = results[1].data || [];
-    if (!skills.length) {
+    if (!skills.length && !isTA) {
       return sb.from("skills").insert([
-        {teacher_id:ME.id, name:"400m Run",       unit:"sec",  lower_better:true},
-        {teacher_id:ME.id, name:"Mile Run",        unit:"min",  lower_better:true},
-        {teacher_id:ME.id, name:"Distance Throw",  unit:"ft",   lower_better:false},
-        {teacher_id:ME.id, name:"Push-ups",        unit:"reps", lower_better:false},
-        {teacher_id:ME.id, name:"Sit-ups",         unit:"reps", lower_better:false},
-        {teacher_id:ME.id, name:"Hand-Eye Coord",  unit:"pts",  lower_better:false}
+        {teacher_id:tid, name:"400m Run",       unit:"sec",  lower_better:true},
+        {teacher_id:tid, name:"Mile Run",        unit:"min",  lower_better:true},
+        {teacher_id:tid, name:"Distance Throw",  unit:"ft",   lower_better:false},
+        {teacher_id:tid, name:"Push-ups",        unit:"reps", lower_better:false},
+        {teacher_id:tid, name:"Sit-ups",         unit:"reps", lower_better:false},
+        {teacher_id:tid, name:"Hand-Eye Coord",  unit:"pts",  lower_better:false}
       ]).then(function() { return loadData(); });
     }
     return loadEntries();
@@ -1587,6 +1662,7 @@ function loadData() {
     renderLB();
     renderPortalList();
     renderSkillsList();
+    renderQuickEdit();
   });
 }
 
@@ -1629,12 +1705,12 @@ function renderRoster() {
     var logged = skills.filter(function(sk) { return getVals(s.id, sk.id).length > 0; }).length;
     var pct = skills.length ? (logged / skills.length * 100).toFixed(0) : 0;
     return '<tr>' +
-      '<td><div class="row">' + avHTML(s.first, s.last, 28) + '<div>' + (s.teacher_id !== ME.id ? '<span style="background:var(--purple-lt);color:var(--purple);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;display:block;margin-bottom:2px">Colleague</span>' : '') + '<div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + '</div><button onclick="openSP(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto;margin-top:4px">Edit scores</button></div></div></td>' +
+      '<td><div class="row">' + avHTML(s.first, s.last, 28) + '<div>' + (s.teacher_id !== ownerId() ? '<span style="background:var(--purple-lt);color:var(--purple);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;display:block;margin-bottom:2px">Colleague</span>' : '') + '<div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + '</div><button onclick="openSP(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto;margin-top:4px">Edit scores</button></div></div></td>' +
       '<td style="color:var(--text2)">' + s.grade + '</td>' +
       '<td style="color:var(--text2)">P' + s.period + '</td>' +
-      '<td><div class="row" style="gap:6px"><span class="mono badge b-gray" style="font-size:11px">' + (s.access_code || "—") + '</span><button onclick="resetOne(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto" title="New code">↻</button></div></td>' +
+      '<td><div class="row" style="gap:6px"><span class="mono badge b-gray" style="font-size:11px">' + (s.access_code || "—") + '</span>' + (isTA ? "" : '<button onclick="resetOne(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto" title="New code">↻</button>') + '</div></td>' +
       '<td><div class="row" style="gap:6px"><div style="height:4px;width:56px;background:var(--border2);border-radius:99px;overflow:hidden"><div style="height:4px;width:' + pct + '%;background:var(--gold);border-radius:99px"></div></div><span style="font-size:11px;color:var(--text2)">' + logged + '/' + skills.length + '</span></div></td>' +
-      '<td><button onclick="delStudent(\'' + s.id + '\',\'' + s.first + ' ' + s.last + '\')" style="font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent;width:auto">🗑</button></td>' +
+      '<td>' + (isTA ? "—" : '<button onclick="delStudent(\'' + s.id + '\',\'' + s.first + ' ' + s.last + '\')" style="font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent;width:auto">🗑</button>') + '</td>' +
       '</tr>';
   }).join(""));
 }
@@ -4570,6 +4646,7 @@ async function absorbSelected() {
 
 // ── NAVIGATION ───────────────────────────────────────────────
 function goView(v) {
+  if (isTA && v === "student") v = "teacher";
   ["teacher","student","leaderboard","profile","admin"].forEach(function(id) {
     document.getElementById("view-" + id).classList.toggle("hidden", id !== v);
     var btn = document.getElementById("nav-" + id);
@@ -4581,7 +4658,8 @@ function goView(v) {
   if (v === "admin")       loadAdmin();
 }
 function goTab(t) {
-  ["roster","quickedit","upload","add","scores","progress","skills","share"].forEach(function(id) {
+  if (isTA && ["upload","add","skills","share","assistants"].indexOf(t) >= 0) t = "quickedit";
+  ["roster","quickedit","upload","add","scores","progress","skills","share","assistants"].forEach(function(id) {
     var pane = document.getElementById("pane-" + id);
     var tab  = document.getElementById("tab-" + id);
     if (pane) pane.classList.toggle("hidden", id !== t);
@@ -4592,6 +4670,7 @@ function goTab(t) {
   if (t === "share")    loadSharePanel();
   if (t === "scores")   initGridFilters();
   if (t === "quickedit") renderQuickEdit();
+  if (t === "assistants") loadTAList();
 }
 function renderQuickEdit() {
   var weekEl = document.getElementById("qe-week");
@@ -4771,6 +4850,84 @@ function saveRecordEdit(sid) {
     else sb.from("entries").insert([row]).select("id").then(function(r) {
       if (r.error) note(r.error.message); else done(r.data && r.data[0] && r.data[0].id);
     });
+  });
+}
+function taSetupNeeded(err) {
+  var msg = (err && err.message) ? err.message : String(err || "");
+  return /teacher_assistants|does not exist|schema cache|relation/i.test(msg);
+}
+function loadTAList() {
+  var el = document.getElementById("ta-list");
+  if (!el) return;
+  sb.from("teacher_assistants").select("*").eq("owner_teacher_id", ME.id).order("created_at").then(function(r) {
+    if (r.error) {
+      if (taSetupNeeded(r.error)) {
+        el.innerHTML = '<div class="alert a-err">Run the Assistants SQL in Supabase first (Project → SQL editor). File: supabase/teacher-assistants.sql</div>';
+        return;
+      }
+      el.innerHTML = '<div class="alert a-err">' + r.error.message + "</div>";
+      return;
+    }
+    var rows = r.data || [];
+    if (!rows.length) { el.textContent = "None yet."; return; }
+    el.innerHTML = rows.map(function(t) {
+      return '<div class="row" style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
+        '<div style="flex:1"><div style="font-weight:600">' + (t.name || "Assistant") + '</div>' +
+        '<div style="font-size:12px;color:var(--text2)">' + t.email + "</div></div>" +
+        '<button style="width:auto;font-size:12px;padding:5px 10px;color:#F0A090;background:rgba(192,57,43,0.18);border-color:transparent" onclick="removeTA(\'' + t.id + '\',\'' + String(t.email || "").replace(/'/g, "") + '\')">Remove</button></div>';
+    }).join("");
+  });
+}
+function createTA() {
+  var name  = (document.getElementById("ta-name")  || {}).value.trim();
+  var email = (document.getElementById("ta-email") || {}).value.trim();
+  var pass  = (document.getElementById("ta-pass")  || {}).value;
+  if (!name)  { alertEl("ta-alert", "Enter the assistant’s name."); return; }
+  if (!email || email.indexOf("@") === -1) { alertEl("ta-alert", "Enter a valid email."); return; }
+  if (!pass || pass.length < 6) { alertEl("ta-alert", "Password must be at least 6 characters."); return; }
+  if (!SB_KEY || !window.supabase) { alertEl("ta-alert", "Database is still loading. Try again."); return; }
+  alertEl("ta-alert", "Creating login…", "ok");
+  var temp = window.supabase.createClient(location.origin + "/api/supabase", SB_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
+  temp.auth.signUp({
+    email: email,
+    password: pass,
+    options: { data: { name: name, role: "ta", owner_teacher_id: ME.id } }
+  }).then(function(r) {
+    if (r.error) { alertEl("ta-alert", r.error.message); return; }
+    var uid = r.data && r.data.user && r.data.user.id;
+    if (!uid) { alertEl("ta-alert", "Account was created but no user id came back. Ask the TA to sign in once, then try again."); return; }
+    return sb.from("teacher_assistants").insert([{
+      user_id: uid,
+      owner_teacher_id: ME.id,
+      email: email,
+      name: name
+    }]).then(function(ir) {
+      if (ir.error) {
+        if (taSetupNeeded(ir.error)) {
+          alertEl("ta-alert", "Run supabase/teacher-assistants.sql in the Supabase SQL editor, then create the login again.");
+          return;
+        }
+        alertEl("ta-alert", ir.error.message);
+        return;
+      }
+      document.getElementById("ta-name").value = "";
+      document.getElementById("ta-email").value = "";
+      document.getElementById("ta-pass").value = "";
+      alertEl("ta-alert", "✓ Login created. " + email + " can sign in on this same page with that password.", "ok");
+      loadTAList();
+    });
+  }).catch(function(e) {
+    alertEl("ta-alert", e && e.message ? e.message : "Could not create login.");
+  });
+}
+function removeTA(id, email) {
+  if (!confirm("Remove " + (email || "this assistant") + "? They will no longer be able to enter scores.")) return;
+  sb.from("teacher_assistants").delete().eq("id", id).eq("owner_teacher_id", ME.id).then(function(r) {
+    if (r.error) { alertEl("ta-alert", r.error.message); return; }
+    alertEl("ta-alert", "✓ Assistant removed.", "ok");
+    loadTAList();
   });
 }
 function goAdminTab(t) {
