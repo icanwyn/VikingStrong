@@ -4891,14 +4891,8 @@ function createTA() {
   var temp = window.supabase.createClient(location.origin + "/api/supabase", SB_KEY, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
-  temp.auth.signUp({
-    email: email,
-    password: pass,
-    options: { data: { name: name, role: "ta", owner_teacher_id: ME.id } }
-  }).then(function(r) {
-    if (r.error) { alertEl("ta-alert", r.error.message); return; }
-    var uid = r.data && r.data.user && r.data.user.id;
-    if (!uid) { alertEl("ta-alert", "Account was created but no user id came back. Ask the TA to sign in once, then try again."); return; }
+  function finishTA(uid) {
+    if (!uid) { alertEl("ta-alert", "Could not get the new user id. Try again."); return Promise.resolve(); }
     return sb.from("teacher_assistants").insert([{
       user_id: uid,
       owner_teacher_id: ME.id,
@@ -4907,8 +4901,14 @@ function createTA() {
     }]).then(function(ir) {
       if (ir.error) {
         if (taSetupNeeded(ir.error)) {
-          alertEl("ta-alert", "Run supabase/teacher-assistants.sql in the Supabase SQL editor, then create the login again.");
+          alertEl("ta-alert", "Run the full Assistants SQL in Supabase first, then create the login again.");
           return;
+        }
+        if (/duplicate|unique/i.test(ir.error.message || "")) {
+          return sb.rpc("confirm_ta_emails").then(function() {
+            alertEl("ta-alert", "✓ This assistant is already set up. They can sign in now.", "ok");
+            loadTAList();
+          });
         }
         alertEl("ta-alert", ir.error.message);
         return;
@@ -4918,13 +4918,32 @@ function createTA() {
         document.getElementById("ta-email").value = "";
         document.getElementById("ta-pass").value = "";
         if (cr.error) {
-          alertEl("ta-alert", "Login created, but email still needs confirming. Run the confirm SQL in Supabase, then the TA can sign in.");
+          alertEl("ta-alert", "Login created. Run the Assistants SQL in Supabase if they still see “email not confirmed.”");
         } else {
           alertEl("ta-alert", "✓ Login created. " + email + " can sign in now with that password.", "ok");
         }
         loadTAList();
       });
     });
+  }
+  temp.auth.signUp({
+    email: email,
+    password: pass,
+    options: { data: { name: name, role: "ta", owner_teacher_id: ME.id } }
+  }).then(function(r) {
+    if (r.error && /already|registered|exists/i.test(r.error.message || "")) {
+      return temp.auth.signInWithPassword({ email: email, password: pass }).then(function(sr) {
+        if (sr.error) {
+          alertEl("ta-alert", "That email already has an account. Use the same password you set before, or pick a new email.");
+          return;
+        }
+        var uid = sr.data && sr.data.user && sr.data.user.id;
+        return temp.auth.signOut().then(function() { return finishTA(uid); });
+      });
+    }
+    if (r.error) { alertEl("ta-alert", r.error.message); return; }
+    var uid = r.data && r.data.user && r.data.user.id;
+    return finishTA(uid);
   }).catch(function(e) {
     alertEl("ta-alert", e && e.message ? e.message : "Could not create login.");
   });

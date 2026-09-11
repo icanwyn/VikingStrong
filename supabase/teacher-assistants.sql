@@ -192,6 +192,7 @@ grant execute on function public.confirm_ta_emails() to authenticated;
 update auth.users u
 set email_confirmed_at = coalesce(u.email_confirmed_at, now())
 where u.email_confirmed_at is null
-  and u.id in (
-    select ta.user_id from public.teacher_assistants ta where ta.user_id is not null
+  and (
+    u.id in (select ta.user_id from public.teacher_assistants ta where ta.user_id is not null)
+    or coalesce(u.raw_user_meta_data ->> 'role', '') = 'ta'
   );
