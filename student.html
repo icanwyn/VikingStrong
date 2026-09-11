@@ -256,6 +256,7 @@ button.primary{
 <script>
 var teacherId = null, teacherInfo = null, students = [], skills = [], entries = {}, selectedStudent = null, sb = null;
 var lastScreen = "screen-select";
+var studentVerified = false;
 var params = new URLSearchParams(location.search);
 teacherId = params.get("t");
 var urlPeriod = params.get("p");
@@ -282,9 +283,12 @@ function show(id) {
   var boardBtn = document.getElementById("board-btn");
   var logBtn = document.getElementById("log-btn");
   if (boardBtn) {
-    boardBtn.classList.toggle("hidden", onBoard || id === "screen-loading" || id === "screen-error" || id === "screen-classes");
+    boardBtn.classList.toggle("hidden", onBoard || id === "screen-loading" || id === "screen-error" || id === "screen-classes" || id === "screen-verify");
   }
-  if (logBtn) logBtn.classList.toggle("hidden", !onBoard);
+  if (logBtn) {
+    logBtn.classList.toggle("hidden", !onBoard);
+    logBtn.textContent = studentVerified ? "📋 Log scores" : "← Back";
+  }
   if (id !== "screen-board" && id !== "screen-loading" && id !== "screen-error") lastScreen = id;
 }
 function startOfCalendarWeek(date) {
@@ -515,7 +519,7 @@ function bootStudent() {
     document.getElementById("teacher-label").textContent = (teacherInfo.name || "PE Class") + (teacherInfo.school ? " · " + teacherInfo.school : "");
     document.title = "Log Scores — " + (teacherInfo.name || "VikingStrong");
     return Promise.all([
-      sb.from("students").select("*").eq("teacher_id", teacherId).order("last"),
+      sb.from("students").select("id,first,last,grade,period,goals,teacher_id,email,access_code").eq("teacher_id", teacherId).order("last"),
       sb.from("skills").select("*").eq("teacher_id", teacherId).order("created_at")
     ]);
   }).then(function(res) {
@@ -578,10 +582,11 @@ function openBoard() {
   show("screen-board");
 }
 function backFromBoard() {
-  if (selectedStudent) { openMyPage(); return; }
-  if (lastScreen === "screen-board") lastScreen = "screen-select";
-  if (lastScreen === "screen-select") filterStudents();
-  show(lastScreen || "screen-select");
+  if (studentVerified && selectedStudent) { openMyPage(); return; }
+  selectedStudent = null;
+  studentVerified = false;
+  show("screen-select");
+  filterStudents();
 }
 function goStuTab(t) {
   var log = document.getElementById("pane-log");
@@ -595,6 +600,13 @@ function goStuTab(t) {
   if (t === "goals") renderStuGoals();
 }
 function openMyPage() {
+  if (!studentVerified || !selectedStudent) {
+    selectedStudent = null;
+    studentVerified = false;
+    show("screen-select");
+    filterStudents();
+    return;
+  }
   loadScoreScreen();
   goStuTab("log");
   show("screen-scores");
@@ -651,7 +663,7 @@ function renderStuGoals() {
   }).filter(Boolean).join("") || '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">Set your goals above and track them here.</div>';
 }
 function saveStuGoals() {
-  if (!selectedStudent) return;
+  if (!studentVerified || !selectedStudent) return;
   var goals = {};
   skills.forEach(function(sk) {
     var el = document.getElementById("sg-" + sk.id);
@@ -758,6 +770,7 @@ function jumpTo(letter) {
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 function selectStudent(id) {
+  studentVerified = false;
   selectedStudent = students.find(function(s) { return s.id === id; });
   if (!selectedStudent) return;
   var av = document.getElementById("v2-avatar");
@@ -773,15 +786,27 @@ function selectStudent(id) {
 function verifyCode() {
   var code = document.getElementById("v2-code").value.trim();
   var err = document.getElementById("v2-error");
-  if (code.toLowerCase() === String(selectedStudent.access_code).toLowerCase()) {
+  if (!selectedStudent) return;
+  function ok() {
     err.classList.add("hidden");
+    studentVerified = true;
     openMyPage();
-  } else {
+  }
+  function bad() {
+    studentVerified = false;
     err.textContent = "Incorrect code. Check your sticker and try again.";
     err.classList.remove("hidden");
     document.getElementById("v2-code").value = "";
     document.getElementById("v2-code").focus();
   }
+  if (selectedStudent.access_code && code.toLowerCase() === String(selectedStudent.access_code).toLowerCase()) {
+    ok();
+    return;
+  }
+  sb.rpc("verify_student_code", { p_student_id: selectedStudent.id, p_code: code }).then(function(r) {
+    if (r.error || r.data !== true) bad();
+    else ok();
+  }).catch(bad);
 }
 function loadScoreScreen() {
   var s = selectedStudent;
@@ -841,6 +866,7 @@ function renderPastScores() {
   el.innerHTML = blocks || '<div style="font-size:13px;color:var(--text3)">No earlier scores to edit.</div>';
 }
 function savePastScore(entryId, skid, inputId) {
+  if (!studentVerified || !selectedStudent) return;
   var sk = skills.find(function(x) { return x.id === skid; });
   var inp = document.getElementById(inputId);
   var parsed = parseTimeInput(inp && inp.value, sk);
@@ -899,6 +925,7 @@ function upsertScoreRow(row) {
   });
 }
 function submitScores() {
+  if (!studentVerified || !selectedStudent) return;
   var btn = document.getElementById("submit-btn");
   btn.disabled = true;
   btn.textContent = "Saving…";
@@ -947,6 +974,7 @@ function submitScores() {
 }
 function goBack(screen) {
   selectedStudent = null;
+  studentVerified = false;
   show("screen-" + screen);
   if (screen === "select") filterStudents();
 }

@@ -4913,12 +4913,15 @@ function createTA() {
         alertEl("ta-alert", ir.error.message);
         return;
       }
-      return sb.rpc("confirm_ta_emails").then(function(cr) {
+      return sb.rpc("confirm_assistant_email", { p_email: email }).then(function(cr) {
+        if (cr.error) return sb.rpc("confirm_ta_emails");
+        return cr;
+      }).then(function(cr) {
         document.getElementById("ta-name").value = "";
         document.getElementById("ta-email").value = "";
         document.getElementById("ta-pass").value = "";
-        if (cr.error) {
-          alertEl("ta-alert", "Login created. Run the Assistants SQL in Supabase if they still see “email not confirmed.”");
+        if (cr && cr.error) {
+          alertEl("ta-alert", "Login created. Run the confirm-email SQL in Supabase if they still see “email not confirmed.”");
         } else {
           alertEl("ta-alert", "✓ Login created. " + email + " can sign in now with that password.", "ok");
         }
