@@ -162,3 +162,36 @@ create policy "ta_update_entries" on public.entries
         and ta.user_id = auth.uid()
     )
   );
+
+-- TAs created by a teacher should be able to sign in without a confirmation email.
+create or replace function public.confirm_ta_emails()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n int;
+begin
+  update auth.users u
+  set email_confirmed_at = coalesce(u.email_confirmed_at, now())
+  where u.email_confirmed_at is null
+    and u.id in (
+      select ta.user_id
+      from public.teacher_assistants ta
+      where ta.user_id is not null
+        and ta.owner_teacher_id = auth.uid()
+    );
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+revoke all on function public.confirm_ta_emails() from public;
+grant execute on function public.confirm_ta_emails() to authenticated;
+
+update auth.users u
+set email_confirmed_at = coalesce(u.email_confirmed_at, now())
+where u.email_confirmed_at is null
+  and u.id in (
+    select ta.user_id from public.teacher_assistants ta where ta.user_id is not null
+  );

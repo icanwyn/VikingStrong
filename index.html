@@ -4869,6 +4869,7 @@ function loadTAList() {
       return;
     }
     var rows = r.data || [];
+    sb.rpc("confirm_ta_emails");
     if (!rows.length) { el.textContent = "None yet."; return; }
     el.innerHTML = rows.map(function(t) {
       return '<div class="row" style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">' +
@@ -4912,11 +4913,17 @@ function createTA() {
         alertEl("ta-alert", ir.error.message);
         return;
       }
-      document.getElementById("ta-name").value = "";
-      document.getElementById("ta-email").value = "";
-      document.getElementById("ta-pass").value = "";
-      alertEl("ta-alert", "✓ Login created. " + email + " can sign in on this same page with that password.", "ok");
-      loadTAList();
+      return sb.rpc("confirm_ta_emails").then(function(cr) {
+        document.getElementById("ta-name").value = "";
+        document.getElementById("ta-email").value = "";
+        document.getElementById("ta-pass").value = "";
+        if (cr.error) {
+          alertEl("ta-alert", "Login created, but email still needs confirming. Run the confirm SQL in Supabase, then the TA can sign in.");
+        } else {
+          alertEl("ta-alert", "✓ Login created. " + email + " can sign in now with that password.", "ok");
+        }
+        loadTAList();
+      });
     });
   }).catch(function(e) {
     alertEl("ta-alert", e && e.message ? e.message : "Could not create login.");
