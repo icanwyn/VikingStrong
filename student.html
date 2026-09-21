@@ -189,14 +189,14 @@ button.primary{
       </div>
       <div class="card" style="margin-bottom:14px">
         <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:6px">📋 This Week's Scores</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Calendar week is Monday–Sunday. Anything you enter this week updates the same score.</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:14px">One score per skill each week (Monday–Sunday). You can update it this week if you improve or need to fix a mistake.</div>
         <div id="score-fields"></div>
         <div id="score-alert" style="margin-top:10px"></div>
         <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save / Update scores</button>
       </div>
       <div class="card" style="margin-bottom:14px">
         <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold3);margin-bottom:6px">✏️ Edit past scores</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Fix a mistake from an earlier week.</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Fix a mistake from an earlier week. This week’s score is edited above.</div>
         <div id="stu-past-scores"></div>
       </div>
       <div class="card">
@@ -235,16 +235,26 @@ button.primary{
 
   <div id="screen-board" class="hidden">
     <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold3);margin-bottom:4px;text-align:center">Class Board</div>
-    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px">Top 10 latest scores</div>
+    <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px">Top 10 best scores</div>
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
       <select id="lb-skill" onchange="renderBoard()" style="flex:1;min-width:140px"></select>
       <select id="lb-period" onchange="renderBoard()" style="flex:1;min-width:120px"><option value="all">All Periods</option></select>
+      <select id="lb-gender" onchange="renderBoard()" style="flex:1;min-width:140px" aria-label="Filter by gender"><option value="all">Filter: All Genders</option></select>
+      <select id="lb-sort" onchange="renderBoard()" style="flex:1;min-width:120px">
+        <option value="score">Sort: Rank</option>
+        <option value="gender">Sort: Gender</option>
+      </select>
     </div>
     <div id="lb-tag" style="text-align:center;margin-bottom:12px"></div>
     <div id="lb-podium" class="podium"></div>
     <div class="card" style="padding:0;overflow:auto">
       <table class="board-table">
-        <thead><tr><th>Rank</th><th>Student</th><th>Period</th><th>Score</th><th>Change</th></tr></thead>
+        <thead><tr>
+          <th onclick="setBoardSort('score')" style="cursor:pointer">Rank</th>
+          <th>Student</th><th>Period</th>
+          <th onclick="setBoardSort('gender')" style="cursor:pointer">Gender</th>
+          <th>Score</th><th>Change</th>
+        </tr></thead>
         <tbody id="lb-body"></tbody>
       </table>
     </div>
@@ -379,6 +389,12 @@ function getLastVal(sid, skid) {
   var v = getVals(sid, skid);
   return v.length ? v[v.length - 1] : null;
 }
+function getBest(sid, skid) {
+  var v = getVals(sid, skid);
+  if (!v.length) return null;
+  var sk = skills.find(function(s) { return s.id === skid; });
+  return sk && sk.lower_better ? Math.min.apply(null, v) : Math.max.apply(null, v);
+}
 function findWeekEntry(sid, skid, week) {
   var list = getEntries(sid, skid);
   for (var i = list.length - 1; i >= 0; i--) {
@@ -386,6 +402,22 @@ function findWeekEntry(sid, skid, week) {
     if (typeof e === "object" && weekMatches(e.week_label, week)) return e;
   }
   return null;
+}
+function dedupeEntries() {
+  Object.keys(entries || {}).forEach(function(sid) {
+    Object.keys(entries[sid] || {}).forEach(function(skid) {
+      var list = entries[sid][skid] || [];
+      var seen = {};
+      var out = [];
+      list.forEach(function(e) {
+        if (!e || typeof e !== "object") { out.push(e); return; }
+        var k = weekKey(e.week_label);
+        if (Object.prototype.hasOwnProperty.call(seen, k)) out[seen[k]] = e;
+        else { seen[k] = out.length; out.push(e); }
+      });
+      entries[sid][skid] = out;
+    });
+  });
 }
 function isTimeSkill(sk) {
   var u = String((sk && sk.unit) != null ? sk.unit : sk || "").toLowerCase();
@@ -453,10 +485,69 @@ function getImp(sid, skid) {
   var d = v[v.length - 1] - v[0];
   return { pct: (Math.abs(d) / Math.abs(v[0]) * 100).toFixed(1), ok: sk && sk.lower_better ? d < 0 : d > 0 };
 }
-function getRanked(skid, period) {
+function genderKey(g) {
+  var s = String(g == null ? "" : g).trim().toUpperCase();
+  if (!s) return "unknown";
+  if (s === "M" || s === "MALE" || s === "BOY" || s === "BOYS" || s === "MAN") return "M";
+  if (s === "F" || s === "FEMALE" || s === "GIRL" || s === "GIRLS" || s === "WOMAN") return "F";
+  return s;
+}
+function genderLabel(k) {
+  if (k === "M") return "Male";
+  if (k === "F") return "Female";
+  if (k === "unknown") return "Unspecified";
+  return String(k).replace(/_/g, " ").replace(/\w\S*/g, function(t) {
+    return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  });
+}
+function genderShort(g) {
+  var k = genderKey(g);
+  if (k === "M") return "M";
+  if (k === "F") return "F";
+  if (k === "unknown") return "—";
+  return genderLabel(k);
+}
+function genderGroupCmp(a, b) {
+  var order = { M: 0, F: 1, unknown: 99 };
+  var oa = Object.prototype.hasOwnProperty.call(order, a) ? order[a] : 2;
+  var ob = Object.prototype.hasOwnProperty.call(order, b) ? order[b] : 2;
+  if (oa !== ob) return oa - ob;
+  return a.localeCompare(b);
+}
+function groupByGender(list) {
+  var groups = {};
+  var keys = [];
+  (list || []).forEach(function(s) {
+    var k = genderKey(s.gender);
+    if (!groups[k]) { groups[k] = []; keys.push(k); }
+    groups[k].push(s);
+  });
+  keys.sort(genderGroupCmp);
+  return keys.map(function(k) { return { key: k, label: genderLabel(k), rows: groups[k] }; });
+}
+function genderHeaderRow(label, colspan) {
+  return '<tr><td colspan="' + colspan + '" style="font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold3);background:rgba(201,168,76,.12);padding:10px 8px">' + label + "</td></tr>";
+}
+function uniqueGenderKeys(list) {
+  var seen = { M: true, F: true };
+  var keys = ["M", "F"];
+  (list || []).forEach(function(s) {
+    var k = genderKey(s.gender);
+    if (!seen[k]) { seen[k] = true; keys.push(k); }
+  });
+  keys.sort(genderGroupCmp);
+  return keys;
+}
+function genderMatches(s, gender) {
+  return !gender || gender === "all" || genderKey(s.gender) === gender;
+}
+function getRanked(skid, period, gender) {
   var sk = skills.find(function(s) { return s.id === skid; });
-  var list = (!period || period === "all") ? students : students.filter(function(s) { return String(s.period) === String(period); });
-  return list.map(function(s) { return Object.assign({}, s, { val: getLastVal(s.id, skid) }); })
+  var list = students.filter(function(s) {
+    var mp = !period || period === "all" || String(s.period) === String(period);
+    return mp && genderMatches(s, gender);
+  });
+  return list.map(function(s) { return Object.assign({}, s, { val: getBest(s.id, skid) }); })
     .filter(function(s) { return isNumericScore(s.val); })
     .sort(function(a, b) { return sk && sk.lower_better ? a.val - b.val : b.val - a.val; });
 }
@@ -519,7 +610,7 @@ function bootStudent() {
     document.getElementById("teacher-label").textContent = (teacherInfo.name || "PE Class") + (teacherInfo.school ? " · " + teacherInfo.school : "");
     document.title = "Log Scores — " + (teacherInfo.name || "VikingStrong");
     return Promise.all([
-      sb.from("students").select("id,first,last,grade,period,goals,teacher_id,email,access_code").eq("teacher_id", teacherId).order("last"),
+      sb.from("students").select("id,first,last,grade,gender,period,goals,teacher_id,email,access_code").eq("teacher_id", teacherId).order("last"),
       sb.from("skills").select("*").eq("teacher_id", teacherId).order("created_at")
     ]);
   }).then(function(res) {
@@ -539,6 +630,7 @@ function bootStudent() {
         if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
         entries[e.student_id][e.skill_id].push({ id: e.id, value: decodeScoreValue(e.value), week_label: e.week_label });
       });
+      dedupeEntries();
       var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
       var pf = document.getElementById("s-period");
       periods.forEach(function(p) {
@@ -560,8 +652,10 @@ function bootStudent() {
 function fillBoardFilters() {
   var skSel = document.getElementById("lb-skill");
   var pSel = document.getElementById("lb-period");
+  var gSel = document.getElementById("lb-gender");
   var curSk = skSel && skSel.value;
   var curP = pSel && pSel.value;
+  var curG = gSel && gSel.value;
   if (skSel) {
     skSel.innerHTML = skills.map(function(sk) {
       return '<option value="' + sk.id + '">' + sk.name + "</option>";
@@ -574,6 +668,13 @@ function fillBoardFilters() {
       periods.map(function(p) { return '<option value="' + p + '">Period ' + p + "</option>"; }).join("");
     if (curP) pSel.value = curP;
     else if (urlPeriod && periods.map(String).indexOf(String(urlPeriod)) !== -1) pSel.value = urlPeriod;
+  }
+  if (gSel) {
+    var keys = uniqueGenderKeys(students);
+    gSel.innerHTML = '<option value="all">Filter: All Genders</option>' + keys.map(function(k) {
+      return '<option value="' + k + '">Filter: ' + genderLabel(k) + "</option>";
+    }).join("");
+    if (curG && (curG === "all" || keys.indexOf(curG) !== -1)) gSel.value = curG;
   }
 }
 function openBoard() {
@@ -688,16 +789,35 @@ function saveStuGoals() {
     setTimeout(function() { if (ok) ok.classList.add("hidden"); }, 3000);
   });
 }
+function boardRow(s, i, skid, sk, me) {
+  var imp = getImp(s.id, skid);
+  var mine = me && s.id === me;
+  return '<tr class="' + (mine ? "me-row" : "") + '">' +
+    "<td>" + rankBadge(i + 1, 10) + "</td>" +
+    '<td><div style="display:flex;align-items:center;gap:10px">' + avHTML(s.first, s.last, 28) +
+    '<span style="font-weight:' + (i < 3 || mine ? 700 : 500) + '">' + s.first + " " + s.last + (mine ? ' <span class="badge badge-gold">You</span>' : "") + "</span></div></td>" +
+    '<td style="color:var(--text2)">P' + s.period + "</td>" +
+    '<td style="color:var(--text2)">' + genderShort(s.gender) + "</td>" +
+    '<td style="font-weight:600">' + formatScore(s.val, sk) + "</td>" +
+    "<td>" + (imp ? '<span style="color:' + (imp.ok ? "var(--gold3)" : "var(--red)") + ';font-size:12px">' + (imp.ok ? "▲" : "▼") + " " + imp.pct + "%</span>" : "—") + "</td></tr>";
+}
+function setBoardSort(v) {
+  var el = document.getElementById("lb-sort");
+  if (el) el.value = v;
+  renderBoard();
+}
 function renderBoard() {
   var skid = (document.getElementById("lb-skill") || {}).value;
   var period = (document.getElementById("lb-period") || {}).value || "all";
+  var gender = (document.getElementById("lb-gender") || {}).value || "all";
+  var sort = (document.getElementById("lb-sort") || {}).value || "score";
   var sk = skills.find(function(s) { return s.id === skid; });
-  var rankedAll = getRanked(skid, period);
+  var rankedAll = getRanked(skid, period, gender);
   var ranked = rankedAll.slice(0, 10);
   var tag = document.getElementById("lb-tag");
-  if (tag && sk) tag.innerHTML = '<span class="badge ' + (sk.lower_better ? "badge-gray" : "badge-gold") + '">' + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + "</span>";
+  if (tag && sk) tag.innerHTML = '<span class="badge ' + (sk.lower_better ? "badge-gray" : "badge-gold") + '">' + (sk.lower_better ? "↓ lower is better" : "↑ higher is better") + '</span> <span class="badge badge-gray">Best score</span>';
   var podium = document.getElementById("lb-podium");
-  if (ranked.length >= 1) {
+  if (ranked.length >= 1 && sort !== "gender") {
     var order = [ranked[1], ranked[0], ranked[2]];
     var hts = [70, 100, 52], rnks = [2, 1, 3], lbls = ["2nd", "1st", "3rd"];
     podium.innerHTML = order.map(function(s, i) {
@@ -714,21 +834,19 @@ function renderBoard() {
   }
   var body = document.getElementById("lb-body");
   var me = selectedStudent && selectedStudent.id;
-  if (!ranked.length) {
-    body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:2rem">No scores yet.</td></tr>';
+  if (!rankedAll.length) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:2rem">No scores yet.</td></tr>';
     return;
   }
-  body.innerHTML = ranked.map(function(s, i) {
-    var imp = getImp(s.id, skid);
-    var mine = me && s.id === me;
-    return '<tr class="' + (mine ? "me-row" : "") + '">' +
-      "<td>" + rankBadge(i + 1, 10) + "</td>" +
-      '<td><div style="display:flex;align-items:center;gap:10px">' + avHTML(s.first, s.last, 28) +
-      '<span style="font-weight:' + (i < 3 || mine ? 700 : 500) + '">' + s.first + " " + s.last + (mine ? ' <span class="badge badge-gold">You</span>' : "") + "</span></div></td>" +
-      '<td style="color:var(--text2)">P' + s.period + "</td>" +
-      '<td style="font-weight:600">' + formatScore(s.val, sk) + "</td>" +
-      "<td>" + (imp ? '<span style="color:' + (imp.ok ? "var(--gold3)" : "var(--red)") + ';font-size:12px">' + (imp.ok ? "▲" : "▼") + " " + imp.pct + "%</span>" : "—") + "</td></tr>";
-  }).join("");
+  if (sort === "gender") {
+    body.innerHTML = groupByGender(rankedAll).map(function(g) {
+      return genderHeaderRow(g.label, 6) + g.rows.slice(0, 10).map(function(s, i) {
+        return boardRow(s, i, skid, sk, me);
+      }).join("");
+    }).join("");
+    return;
+  }
+  body.innerHTML = ranked.map(function(s, i) { return boardRow(s, i, skid, sk, me); }).join("");
 }
 
 function filterStudents() {
@@ -822,7 +940,7 @@ function loadScoreScreen() {
     var last = getLastVal(s.id, sk.id);
     var shown = existing ? formatTimeValue(existing.value, sk) : "";
     var status = existing
-      ? '<span style="font-size:11px;color:var(--gold3)">This week — edit to update</span>'
+      ? '<span style="font-size:11px;color:var(--gold3)">This week — change to improve or fix</span>'
       : (last !== null ? '<span style="font-size:11px;color:var(--text3)">Last: </span><span style="font-size:12px;font-weight:600;color:var(--gold3)">' + formatScore(last, sk) + "</span>" : '<span style="font-size:11px;color:var(--text3)">No entries yet</span>');
     return '<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid rgba(30,35,64,0.08)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
@@ -903,6 +1021,7 @@ function applyLocalEntry(row, id) {
     }
   }
   if (!found) list.push({ id: id, value: decodeScoreValue(row.value), week_label: row.week_label });
+  dedupeEntries();
 }
 function upsertScoreRow(row) {
   var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
@@ -952,7 +1071,7 @@ function submitScores() {
   }
   var next = function(i) {
     if (i >= rows.length) {
-      document.getElementById("success-msg").textContent = "Scores saved for " + selectedStudent.first + "! You can come back any time this week to edit.";
+      document.getElementById("success-msg").textContent = "Saved for " + selectedStudent.first + ". Same week updates the same score — improve it or fix a mistake anytime this week.";
       document.getElementById("success-ranks").innerHTML = skills.map(function(sk) {
         var rank = getRank(selectedStudent.id, sk.id);
         var val = getLastVal(selectedStudent.id, sk.id);
