@@ -574,7 +574,7 @@ th.sort-th:hover{color:var(--gold)}
             <option value="all">All Periods</option>
           </select>
           <span id="roster-count" style="font-size:13px;color:var(--text2)"></span>
-          <span style="font-size:12px;color:var(--text3)">Click a name to view and edit scores</span>
+          <span style="font-size:12px;color:var(--text3)">Click a name to edit profile, nickname, gender, and scores</span>
           <button class="teacher-only" onclick="resetPeriodCodes(event)" style="margin-left:auto;font-size:12px;padding:5px 12px;color:var(--gold);background:var(--gold-glow);border-color:rgba(201,168,76,.3)">↻ Reset Period Codes</button>
         </div>
         <div style="overflow-x:auto">
@@ -645,6 +645,7 @@ th.sort-th:hover{color:var(--gold)}
         <div id="add-alert"></div>
         <div class="grid2">
           <div><label class="lbl">First Name</label><input id="a-first"/></div>
+          <div><label class="lbl">Nickname (optional)</label><input id="a-nick" placeholder="Shown on board"/></div>
           <div><label class="lbl">Last Name</label><input id="a-last"/></div>
           <div class="full"><label class="lbl">Email (optional)</label><input id="a-email" type="email" placeholder="student@school.edu"/></div>
           <div><label class="lbl">Grade</label><input id="a-grade" placeholder="e.g. 9, 10, 11…"/></div>
@@ -1082,6 +1083,31 @@ th.sort-th:hover{color:var(--gold)}
     </div>
     <div style="padding:1.25rem 1.5rem">
       <div id="sp-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem"></div>
+      <div class="card teacher-only" id="sp-profile-card" style="margin-bottom:1.25rem;border-color:rgba(201,168,76,.25)">
+        <div class="row" style="margin-bottom:12px">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:700;color:var(--gold)">👤 Student profile</div>
+          <button onclick="saveStudentProfile()" class="gold" style="margin-left:auto;font-size:12px;padding:4px 12px;width:auto">Save profile</button>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">Fix a misspelled name, add a nickname, or correct gender. Nickname is what shows on the board and stickers.</div>
+        <div id="sp-profile-alert"></div>
+        <div class="grid2">
+          <div><label class="lbl">First name</label><input id="sp-first"/></div>
+          <div><label class="lbl">Nickname</label><input id="sp-nick" placeholder="Optional"/></div>
+          <div><label class="lbl">Last name</label><input id="sp-last"/></div>
+          <div>
+            <label class="lbl">Gender</label>
+            <select id="sp-gender">
+              <option value="">Unspecified</option>
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+              <option value="NB">Non-binary</option>
+            </select>
+          </div>
+          <div><label class="lbl">Grade</label><input id="sp-grade"/></div>
+          <div><label class="lbl">Period</label><input id="sp-period"/></div>
+          <div class="full"><label class="lbl">Email</label><input id="sp-email" type="email"/></div>
+        </div>
+      </div>
       <div class="card" style="margin-bottom:1.25rem;border-color:rgba(201,168,76,.25)">
         <div class="row" style="margin-bottom:12px">
           <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:700;color:var(--gold)">🎯 Goals</div>
@@ -1182,7 +1208,97 @@ function avSty(f, l, sz) {
 }
 function avHTML(f, l, sz) {
   sz = sz || 28;
-  return '<div class="av" style="' + avSty(f, l, sz) + '">' + f[0] + l[0] + '</div>';
+  var fi = String(f || "?").charAt(0);
+  var li = String(l || "").charAt(0);
+  return '<div class="av" style="' + avSty(f || "?", l || " ", sz) + '">' + fi + li + '</div>';
+}
+function studentFirst(s) {
+  if (!s) return "";
+  var n = String(s.nickname || "").trim();
+  return n || String(s.first || "");
+}
+function studentLast(s) { return String((s && s.last) || ""); }
+function studentName(s) { return (studentFirst(s) + " " + studentLast(s)).trim(); }
+function studentAv(s, sz) { return avHTML(studentFirst(s), studentLast(s), sz); }
+function fillStudentProfileForm(s) {
+  var card = document.getElementById("sp-profile-card");
+  if (card) card.classList.toggle("hidden", !!(isTA || (s && s.teacher_id && s.teacher_id !== ownerId())));
+  var set = function(id, val) { var el = document.getElementById(id); if (el) el.value = val == null ? "" : String(val); };
+  set("sp-first", s.first);
+  set("sp-nick", s.nickname);
+  set("sp-last", s.last);
+  set("sp-grade", s.grade);
+  set("sp-period", s.period);
+  set("sp-email", s.email);
+  var gEl = document.getElementById("sp-gender");
+  if (gEl) {
+    var g = genderKey(s.gender);
+    if (g === "unknown") g = String(s.gender || "").trim();
+    if (g && g !== "M" && g !== "F" && g !== "NB" && g !== "unknown") {
+      var exists = false;
+      for (var i = 0; i < gEl.options.length; i++) if (gEl.options[i].value === g) exists = true;
+      if (!exists) {
+        var opt = document.createElement("option");
+        opt.value = g;
+        opt.textContent = genderLabel(g);
+        gEl.appendChild(opt);
+      }
+    }
+    if (g === "unknown") g = "";
+    gEl.value = g;
+  }
+  var alertBox = document.getElementById("sp-profile-alert");
+  if (alertBox) alertBox.innerHTML = "";
+}
+function applyStudentPatch(id, patch) {
+  function apply(list) {
+    if (!list) return;
+    var i = list.findIndex(function(x) { return x.id === id; });
+    if (i > -1) list[i] = Object.assign({}, list[i], patch);
+  }
+  apply(students);
+  if (typeof mergedStudents !== "undefined") apply(mergedStudents);
+}
+function saveStudentProfile() {
+  var id = spStudentId;
+  var s = id && (students.find(function(x) { return x.id === id; }) || allStudents().find(function(x) { return x.id === id; }));
+  if (!s) return;
+  var first = String((document.getElementById("sp-first") || {}).value || "").trim();
+  var last = String((document.getElementById("sp-last") || {}).value || "").trim();
+  var nick = String((document.getElementById("sp-nick") || {}).value || "").trim();
+  var gender = String((document.getElementById("sp-gender") || {}).value || "").trim();
+  var grade = String((document.getElementById("sp-grade") || {}).value || "").trim();
+  var period = String((document.getElementById("sp-period") || {}).value || "").trim();
+  var email = String((document.getElementById("sp-email") || {}).value || "").trim() || null;
+  var alertBox = document.getElementById("sp-profile-alert");
+  function note(msg, ok) {
+    if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
+  }
+  if (!first || !last) { note("First and last name are required."); return; }
+  var payload = { first: first, last: last, gender: gender, grade: grade, period: period, email: email, nickname: nick || null };
+  note("Saving…", true);
+  function finish(saved) {
+    applyStudentPatch(id, saved);
+    note("✓ Profile saved", true);
+    openSP(id);
+    renderRoster();
+    renderProgress();
+    renderLB();
+    if (typeof renderQuickEdit === "function") renderQuickEdit();
+    if (typeof renderPortalList === "function") renderPortalList();
+  }
+  sb.from("students").update(payload).eq("id", id).then(function(r) {
+    if (r.error && /nickname/i.test(r.error.message || "")) {
+      var fallback = { first: first, last: last, gender: gender, grade: grade, period: period, email: email };
+      return sb.from("students").update(fallback).eq("id", id).then(function(r2) {
+        if (r2.error) { note("Error: " + r2.error.message); return; }
+        finish(Object.assign({}, fallback, nick ? { nickname: nick } : {}));
+        if (nick) note("✓ Name and gender saved. To store nickname in the database, run supabase/student-profile.sql in Supabase.", true);
+      });
+    }
+    if (r.error) { note("Error: " + r.error.message); return; }
+    finish(payload);
+  });
 }
 
 // ── Sparkline ────────────────────────────────────────────────
@@ -1950,7 +2066,7 @@ function renderRoster() {
     var logged = skills.filter(function(sk) { return getVals(s.id, sk.id).length > 0; }).length;
     var pct = skills.length ? (logged / skills.length * 100).toFixed(0) : 0;
     return '<tr>' +
-      '<td><div class="row">' + avHTML(s.first, s.last, 28) + '<div>' + (s.teacher_id !== ownerId() ? '<span style="background:var(--purple-lt);color:var(--purple);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;display:block;margin-bottom:2px">Colleague</span>' : '') + '<div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + '</div><button onclick="openSP(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto;margin-top:4px">Edit scores</button></div></div></td>' +
+      '<td><div class="row">' + studentAv(s, 28) + '<div>' + (s.teacher_id !== ownerId() ? '<span style="background:var(--purple-lt);color:var(--purple);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;display:block;margin-bottom:2px">Colleague</span>' : '') + '<div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + studentName(s) + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + (s.nickname ? " · " + s.first + " " + s.last : "") + '</div><button onclick="openSP(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto;margin-top:4px">Edit profile</button></div></div></td>' +
       '<td style="color:var(--text2)">' + s.grade + '</td>' +
       '<td style="color:var(--text2)">P' + s.period + '</td>' +
       '<td><div class="row" style="gap:6px"><span class="mono badge b-gray" style="font-size:11px">' + (s.access_code || "—") + '</span>' + (isTA ? "" : '<button onclick="resetOne(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto" title="New code">↻</button>') + '</div></td>' +
@@ -1982,7 +2098,7 @@ function lbRow(s, i, skid, sk) {
   var imp = getImp(s.id, skid);
   return '<tr style="' + (i===0?"background:rgba(201,168,76,.07)":"") + '">' +
     '<td>' + rankBadge(i+1) + '</td>' +
-    '<td><div class="row">' + avHTML(s.first, s.last, 26) + '<span style="font-weight:' + (i<3?600:400) + '">' + s.first + ' ' + s.last + '</span></div></td>' +
+    '<td><div class="row">' + studentAv(s, 26) + '<span style="font-weight:' + (i<3?600:400) + '">' + studentName(s) + '</span></div></td>' +
     '<td style="color:var(--text2)">P' + s.period + '</td>' +
     '<td style="color:var(--text2)">' + genderShort(s.gender) + '</td>' +
     '<td style="font-weight:500">' + formatScore(s.val, sk) + '</td>' +
@@ -2365,16 +2481,25 @@ function addStudent() {
   var first  = document.getElementById("a-first").value.trim();
   var last   = document.getElementById("a-last").value.trim();
   if (!first || !last) { alertEl("add-alert", "First and last name required."); return; }
+  var nick   = (document.getElementById("a-nick") && document.getElementById("a-nick").value.trim()) || "";
   var grade  = document.getElementById("a-grade").value.trim()  || "";
   var gender = document.getElementById("a-gender").value.trim() || "";
   var period = document.getElementById("a-period").value.trim() || "";
   var email  = document.getElementById("a-email").value.trim() || null;
   var code   = makeCode(first, last, grade);
-  sb.from("students").insert([{first:first, last:last, grade:grade, gender:gender, period:period, email:email, access_code:code, teacher_id:ME.id}]).then(function(r) {
+  var row = {first:first, last:last, grade:grade, gender:gender, period:period, email:email, access_code:code, teacher_id:ME.id};
+  if (nick) row.nickname = nick;
+  function afterAdd(r) {
+    if (r.error && row.nickname && /nickname/i.test(r.error.message || "")) {
+      delete row.nickname;
+      sb.from("students").insert([row]).then(afterAdd);
+      return;
+    }
     if (r.error) { alertEl("add-alert", r.error.message); return; }
     alertEl("add-alert", "✓ " + first + " " + last + " added! Code: <span class='mono'>" + code + "</span>", "ok");
     document.getElementById("a-first").value  = "";
     document.getElementById("a-last").value   = "";
+    if (document.getElementById("a-nick")) document.getElementById("a-nick").value = "";
     document.getElementById("a-email").value  = "";
     document.getElementById("a-grade").value  = "";
     document.getElementById("a-gender").value = "";
@@ -2384,7 +2509,8 @@ function addStudent() {
         return '<div class="row" style="margin-bottom:8px">' + avHTML(s.first, s.last, 26) + '<span style="font-size:13px;font-weight:500">' + s.first + ' ' + s.last + '</span><span style="font-size:12px;color:var(--text2)">Gr ' + s.grade + ' · P' + s.period + '</span><span class="mono badge b-gray" style="margin-left:auto;font-size:11px">' + s.access_code + '</span></div>';
       }).join(""));
     });
-  });
+  }
+  sb.from("students").insert([row]).then(afterAdd);
 }
 
 // ── DELETE STUDENT ───────────────────────────────────────────
@@ -2923,7 +3049,7 @@ function renderStickerSheet() {
   }
   var perSheet = 30;
   function labelHtml(s) {
-    var name = esc(((s.first || "") + " " + (s.last || "")).trim());
+    var name = esc(studentName(s));
     var code = esc(s.access_code || "—");
     var meta = [];
     if (s.period) meta.push("P" + s.period);
@@ -2954,13 +3080,14 @@ function renderStickerSheet() {
 
 // ── STUDENT PROFILE ──────────────────────────────────────────
 function openSP(id) {
-  var s = students.find(function(x) { return x.id === id; });
+  var s = students.find(function(x) { return x.id === id; }) || allStudents().find(function(x) { return x.id === id; });
   if (!s) return;
   var av = document.getElementById("sp-av");
-  av.style.cssText = avSty(s.first, s.last, 48);
-  av.textContent = s.first[0] + s.last[0];
-  document.getElementById("sp-name").textContent = s.first + " " + s.last;
-  document.getElementById("sp-sub").textContent = "Grade " + s.grade + " · Period " + s.period + (s.email ? " · " + s.email : "");
+  av.style.cssText = avSty(studentFirst(s), studentLast(s), 48);
+  av.textContent = (studentFirst(s)[0] || "?") + (studentLast(s)[0] || "");
+  document.getElementById("sp-name").textContent = studentName(s);
+  document.getElementById("sp-sub").textContent = "Grade " + s.grade + " · Period " + s.period + (s.gender ? " · " + genderLabel(genderKey(s.gender) === "unknown" ? s.gender : genderKey(s.gender)) : "") + (s.email ? " · " + s.email : "");
+  fillStudentProfileForm(s);
   var totalEntries = skills.reduce(function(sum, sk) { return sum + getVals(s.id, sk.id).length; }, 0);
   var improving    = skills.filter(function(sk) { var imp = getImp(s.id, sk.id); return imp && imp.ok; }).length;
   var bestRank     = null;
@@ -3986,7 +4113,7 @@ function renderStickerSheet() {
   }
   var perSheet = 30;
   function labelHtml(s) {
-    var name = esc(((s.first || "") + " " + (s.last || "")).trim());
+    var name = esc(studentName(s));
     var code = esc(s.access_code || "—");
     var meta = [];
     if (s.period) meta.push("P" + s.period);
@@ -4017,13 +4144,14 @@ function renderStickerSheet() {
 
 // ── STUDENT PROFILE ──────────────────────────────────────────
 function openSP(id) {
-  var s = students.find(function(x) { return x.id === id; });
+  var s = students.find(function(x) { return x.id === id; }) || allStudents().find(function(x) { return x.id === id; });
   if (!s) return;
   var av = document.getElementById("sp-av");
-  av.style.cssText = avSty(s.first, s.last, 48);
-  av.textContent = s.first[0] + s.last[0];
-  document.getElementById("sp-name").textContent = s.first + " " + s.last;
-  document.getElementById("sp-sub").textContent = "Grade " + s.grade + " · Period " + s.period + (s.email ? " · " + s.email : "");
+  av.style.cssText = avSty(studentFirst(s), studentLast(s), 48);
+  av.textContent = (studentFirst(s)[0] || "?") + (studentLast(s)[0] || "");
+  document.getElementById("sp-name").textContent = studentName(s);
+  document.getElementById("sp-sub").textContent = "Grade " + s.grade + " · Period " + s.period + (s.gender ? " · " + genderLabel(genderKey(s.gender) === "unknown" ? s.gender : genderKey(s.gender)) : "") + (s.email ? " · " + s.email : "");
+  fillStudentProfileForm(s);
   var totalEntries = skills.reduce(function(sum, sk) { return sum + getVals(s.id, sk.id).length; }, 0);
   var improving    = skills.filter(function(sk) { var imp = getImp(s.id, sk.id); return imp && imp.ok; }).length;
   var bestRank     = null;
@@ -5091,7 +5219,7 @@ function renderQuickEdit() {
     var imp = getImp(s.id, skid);
     return '<tr style="' + (i===0?"background:rgba(201,168,76,.07)":"") + '">' +
       "<td>" + rankBadge(i+1) + "</td>" +
-      '<td><div class="row">' + avHTML(s.first, s.last, 26) + '<span style="font-weight:' + (i<3?600:400) + '">' + s.first + " " + s.last + "</span></div></td>" +
+      '<td><div class="row">' + studentAv(s, 26) + '<span style="font-weight:' + (i<3?600:400) + '">' + studentName(s) + "</span></div></td>" +
       '<td style="color:var(--text2)">P' + s.period + "</td>" +
       '<td style="color:var(--text2)">' + genderShort(s.gender) + "</td>" +
       '<td id="rec-sc-' + s.id + '" style="font-weight:700;color:var(--gold);cursor:pointer" title="Click to edit" onclick="startRecordEdit(\'' + s.id + '\')">' + formatScore(s.val, sk) + "</td>" +
@@ -5101,7 +5229,7 @@ function renderQuickEdit() {
   function qeOpenRow(s) {
     return "<tr>" +
       "<td>—</td>" +
-      '<td><div class="row">' + avHTML(s.first, s.last, 26) + "<span>" + s.first + " " + s.last + "</span></div></td>" +
+      '<td><div class="row">' + studentAv(s, 26) + "<span>" + studentName(s) + "</span></div></td>" +
       '<td style="color:var(--text2)">P' + s.period + "</td>" +
       '<td style="color:var(--text2)">' + genderShort(s.gender) + "</td>" +
       '<td id="rec-sc-' + s.id + '" style="font-weight:700;cursor:pointer" title="Click to add or edit" onclick="startRecordEdit(\'' + s.id + '\')">' + (s.val != null ? formatScore(s.val, sk) : '<span style="color:var(--text3);font-weight:500">+ add</span>') + "</td>" +
