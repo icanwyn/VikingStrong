@@ -600,7 +600,7 @@ th.sort-th:hover{color:var(--gold)}
           <span id="qe-tag"></span>
         </div>
         <div id="qe-alert"></div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">One score per student per skill each week (Monday–Sunday). Click a time to improve it or fix a mistake. Use -, ab, mu, or inj if they did not run.</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">One score per student per skill each week. Click a time to change or delete it. Switch weeks above to edit any week. Use -, ab, mu, or inj if they did not run.</div>
         <div id="qe-podium" class="podium"></div>
         <div class="card"><div style="overflow-x:auto">
           <table>
@@ -1376,6 +1376,72 @@ function dedupeEntries() {
       });
       entries[sid][skid] = out;
     });
+  });
+}
+function isUniqueViolation(err) {
+  var msg = (err && err.message) ? err.message : String(err || "");
+  return /duplicate key|unique constraint|entries_student_id_skill_id_week_label/i.test(msg);
+}
+function rowsForWeek(rows, week) {
+  return (rows || []).filter(function(e) { return weekMatches(e.week_label, week); });
+}
+function applyLocalWeekDelete(sid, skid, week) {
+  var raw = entries[sid] && entries[sid][skid];
+  if (!raw) return;
+  entries[sid][skid] = raw.filter(function(e) {
+    return typeof e !== "object" || !weekMatches(e.week_label, week);
+  });
+}
+function upsertWeekScore(studentId, skillId, week, value) {
+  week = canonicalWeekLabel(week);
+  return sb.from("entries").select("id,week_label").eq("student_id", studentId).eq("skill_id", skillId).then(function(chk) {
+    if (chk.error) throw chk.error;
+    var hits = rowsForWeek(chk.data, week);
+    hits.sort(function(a, b) { return (a.week_label === week ? 0 : 1) - (b.week_label === week ? 0 : 1); });
+    var keep = hits[0];
+    var extras = hits.slice(1);
+    function dropExtras(id) {
+      var p = Promise.resolve();
+      extras.forEach(function(e) {
+        p = p.then(function() { return sb.from("entries").delete().eq("id", e.id); });
+      });
+      return p.then(function() { return id; });
+    }
+    if (keep) {
+      return sb.from("entries").update({ value: value }).eq("id", keep.id).then(function(r) {
+        if (r.error) throw r.error;
+        return dropExtras(keep.id);
+      });
+    }
+    return sb.from("entries").insert([{ student_id: studentId, skill_id: skillId, value: value, week_label: week }]).select("id").then(function(r) {
+      if (r.error && isUniqueViolation(r.error)) {
+        return sb.from("entries").select("id,week_label").eq("student_id", studentId).eq("skill_id", skillId).then(function(again) {
+          if (again.error) throw again.error;
+          var hit = rowsForWeek(again.data, week)[0];
+          if (!hit) throw r.error;
+          return sb.from("entries").update({ value: value }).eq("id", hit.id).then(function(u) {
+            if (u.error) throw u.error;
+            return hit.id;
+          });
+        });
+      }
+      if (r.error) throw r.error;
+      return r.data && r.data[0] && r.data[0].id;
+    });
+  });
+}
+function deleteWeekScore(studentId, skillId, week) {
+  week = canonicalWeekLabel(week);
+  return sb.from("entries").select("id,week_label").eq("student_id", studentId).eq("skill_id", skillId).then(function(chk) {
+    if (chk.error) throw chk.error;
+    var hits = rowsForWeek(chk.data, week);
+    var p = Promise.resolve();
+    hits.forEach(function(e) {
+      p = p.then(function() {
+        return sb.from("entries").delete().eq("id", e.id).then(function(r) { if (r.error) throw r.error; });
+      });
+    });
+    return p;
   });
 }
 function isTimeSkill(sk) {
@@ -2274,7 +2340,16 @@ function submitScores() {
     sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
       var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
       if (hit) sb.from("entries").update({ value: row.value }).eq("id", hit.id).then(function(r) { if (r.error) fail(r.error); else after(hit.id); });
-      else sb.from("entries").insert([row]).select("id").then(function(r) { if (r.error) fail(r.error); else after(r.data && r.data[0] && r.data[0].id); });
+      else sb.from("entries").insert([row]).select("id").then(function(r) {
+        if (r.error && isUniqueViolation(r.error)) {
+          sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(again) {
+            var againHit = (again.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
+            if (againHit) sb.from("entries").update({ value: row.value }).eq("id", againHit.id).then(function(u) { if (u.error) fail(u.error); else after(againHit.id); });
+            else fail(r.error);
+          });
+        } else if (r.error) fail(r.error);
+        else after(r.data && r.data[0] && r.data[0].id);
+      });
     });
   };
   next(0);
@@ -2976,7 +3051,7 @@ function renderSpEntries(studentId) {
     '<div style="font-family:\'Cormorant Garamond\',serif;font-size:16px;font-weight:700;color:var(--gold)">✏️ Edit scores</div>' +
     '</div>' +
     '<div id="sp-edit-alert"></div>' +
-    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">Click a time to fix it. Use ab, mu, or inj if they did not run.</div>';
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">You can change or delete any week. Clear a time and save, or press Delete. Use ab, mu, or inj if they did not run.</div>';
   var any = false;
   skills.forEach(function(sk) {
     var list = getEntries(s.id, sk.id) || [];
@@ -3022,15 +3097,20 @@ function teacherPreview(inputId, prevId, skid) {
 function teacherSaveEntry(studentId, entryId, skid, inputId) {
   var sk = skills.find(function(x) { return x.id === skid; });
   var inp = document.getElementById(inputId);
-  var parsed = parseTimeInput(inp && inp.value, sk);
   var alertBox = document.getElementById("sp-edit-alert");
   function note(msg, ok) {
     if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
   }
+  if (!inp || !String(inp.value).trim()) {
+    teacherDeleteEntry(studentId, entryId, skid);
+    return;
+  }
+  var parsed = parseTimeInput(inp.value, sk);
   if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
   note("Saving…", true);
-  sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", entryId).then(function(r) {
-    if (r.error) { note("Error: " + r.error.message); return; }
+  var local = getEntries(studentId, skid).find(function(e) { return e && e.id === entryId; });
+  var week = local && local.week_label ? local.week_label : weekLabel();
+  upsertWeekScore(studentId, skid, week, storeScoreValue(parsed.value)).then(function() {
     applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
     openSP(studentId);
     var box = document.getElementById("sp-edit-alert");
@@ -3038,7 +3118,7 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
     renderRoster();
     renderProgress();
     renderLB();
-  });
+  }).catch(function(err) { note("Error: " + (err && err.message ? err.message : "Could not save")); });
 }
 function teacherDeleteEntry(studentId, entryId, skid) {
   if (!confirm("Delete this score? This cannot be undone.")) return;
@@ -3404,7 +3484,7 @@ function saveGrid() {
         .then(function(chk) {
           var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
           var op = hit
-            ? sb.from("entries").update({ value: row.value, week_label: row.week_label }).eq("id", hit.id)
+            ? sb.from("entries").update({ value: row.value }).eq("id", hit.id)
             : sb.from("entries").insert([row]);
           op.then(function(res) {
             if (res.error) {
@@ -4034,7 +4114,7 @@ function renderSpEntries(studentId) {
     '<div style="font-family:\'Cormorant Garamond\',serif;font-size:16px;font-weight:700;color:var(--gold)">✏️ Edit scores</div>' +
     '</div>' +
     '<div id="sp-edit-alert"></div>' +
-    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">Click a time to fix it. Use ab, mu, or inj if they did not run.</div>';
+    '<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">You can change or delete any week. Clear a time and save, or press Delete. Use ab, mu, or inj if they did not run.</div>';
   var any = false;
   skills.forEach(function(sk) {
     var list = getEntries(s.id, sk.id) || [];
@@ -4080,15 +4160,20 @@ function teacherPreview(inputId, prevId, skid) {
 function teacherSaveEntry(studentId, entryId, skid, inputId) {
   var sk = skills.find(function(x) { return x.id === skid; });
   var inp = document.getElementById(inputId);
-  var parsed = parseTimeInput(inp && inp.value, sk);
   var alertBox = document.getElementById("sp-edit-alert");
   function note(msg, ok) {
     if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
   }
+  if (!inp || !String(inp.value).trim()) {
+    teacherDeleteEntry(studentId, entryId, skid);
+    return;
+  }
+  var parsed = parseTimeInput(inp.value, sk);
   if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
   note("Saving…", true);
-  sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", entryId).then(function(r) {
-    if (r.error) { note("Error: " + r.error.message); return; }
+  var local = getEntries(studentId, skid).find(function(e) { return e && e.id === entryId; });
+  var week = local && local.week_label ? local.week_label : weekLabel();
+  upsertWeekScore(studentId, skid, week, storeScoreValue(parsed.value)).then(function() {
     applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
     openSP(studentId);
     var box = document.getElementById("sp-edit-alert");
@@ -4096,7 +4181,7 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
     renderRoster();
     renderProgress();
     renderLB();
-  });
+  }).catch(function(err) { note("Error: " + (err && err.message ? err.message : "Could not save")); });
 }
 function teacherDeleteEntry(studentId, entryId, skid) {
   if (!confirm("Delete this score? This cannot be undone.")) return;
@@ -4461,7 +4546,7 @@ function saveGrid() {
       .then(function(chk) {
         var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, rows[i].week_label); });
         var op = hit
-          ? sb.from("entries").update({ value: rows[i].value, week_label: rows[i].week_label }).eq("id", hit.id)
+          ? sb.from("entries").update({ value: rows[i].value }).eq("id", hit.id)
           : sb.from("entries").insert([rows[i]]);
         op.then(function(res) {
           if (res.error) {
@@ -5063,12 +5148,37 @@ function startRecordEdit(sid) {
   var shown = existing ? formatTimeValue(existing.value, sk) : "";
   cell.setAttribute("data-editing", "1");
   cell.onclick = null;
-  cell.innerHTML = '<div style="display:flex;align-items:center;gap:6px">' +
-    '<input class="sp-edit-input" id="rec-in-' + sid + '" value="' + String(shown).replace(/"/g, "&quot;") + '" type="text" autocomplete="off" placeholder="time, -, ab, mu, inj"' +
+  cell.innerHTML = '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+    '<input class="sp-edit-input" id="rec-in-' + sid + '" value="' + String(shown).replace(/"/g, "&quot;") + '" type="text" autocomplete="off" placeholder="time, -, ab, mu, inj, or blank to delete"' +
     ' style="width:120px;text-align:center;font-weight:700;padding:6px 8px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();saveRecordEdit(\'' + sid + '\');}if(event.key===\'Escape\')renderQuickEdit()"/>' +
-    '<button class="gold" style="width:auto;padding:5px 10px;font-size:12px" onclick="event.stopPropagation();saveRecordEdit(\'' + sid + '\')">Save</button></div>';
+    '<button class="gold" style="width:auto;padding:5px 10px;font-size:12px" onclick="event.stopPropagation();saveRecordEdit(\'' + sid + '\')">Save</button>' +
+    (existing ? '<button style="width:auto;padding:5px 10px;font-size:12px;color:#F0A090;background:rgba(192,57,43,0.18);border-color:transparent" onclick="event.stopPropagation();clearRecordEdit(\'' + sid + '\')">Delete</button>' : "") +
+    "</div>";
   var inp = document.getElementById("rec-in-" + sid);
   if (inp) { inp.focus(); inp.select(); }
+}
+function refreshAfterScoreChange() {
+  dedupeEntries();
+  renderQuickEdit();
+  renderLB();
+  renderProgress();
+  renderRoster();
+}
+function clearRecordEdit(sid) {
+  var skid = (document.getElementById("qe-skill") || {}).value;
+  var week = canonicalWeekLabel(((document.getElementById("qe-week") || {}).value || "").trim() || weekLabel());
+  var alertBox = document.getElementById("qe-alert");
+  function note(msg, ok) {
+    if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
+  }
+  if (!findWeekEntry(sid, skid, week)) { renderQuickEdit(); return; }
+  if (!confirm("Delete this week's score? This cannot be undone.")) return;
+  note("Removing…", true);
+  deleteWeekScore(sid, skid, week).then(function() {
+    applyLocalWeekDelete(sid, skid, week);
+    note("✓ Score removed", true);
+    refreshAfterScoreChange();
+  }).catch(function(err) { note(err && err.message ? err.message : "Could not delete"); });
 }
 function saveRecordEdit(sid) {
   var skid = (document.getElementById("qe-skill") || {}).value;
@@ -5079,10 +5189,12 @@ function saveRecordEdit(sid) {
   function note(msg, ok) {
     if (alertBox) alertBox.innerHTML = '<div class="alert ' + (ok ? "a-ok" : "a-err") + '">' + msg + "</div>";
   }
-  var parsed = parseTimeInput(inp && inp.value, sk);
+  if (!inp || !String(inp.value).trim()) {
+    clearRecordEdit(sid);
+    return;
+  }
+  var parsed = parseTimeInput(inp.value, sk);
   if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
-  var row = { student_id: sid, skill_id: skid, value: storeScoreValue(parsed.value), week_label: week };
-  var local = findWeekEntry(sid, skid, week);
   function done(id) {
     if (!entries[sid]) entries[sid] = {};
     if (!entries[sid][skid]) entries[sid][skid] = [];
@@ -5090,30 +5202,17 @@ function saveRecordEdit(sid) {
     var found = false;
     for (var j = 0; j < list.length; j++) {
       if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, week))) {
-        list[j].value = parsed.value; list[j].id = id || list[j].id; list[j].week_label = week; found = true; break;
+        list[j].value = parsed.value; list[j].id = id || list[j].id; found = true; break;
       }
     }
     if (!found) list.push({ id: id, value: parsed.value, week_label: week });
+    dedupeEntries();
     note("✓ " + formatScore(parsed.value, sk) + " saved", true);
-    renderQuickEdit();
-    renderLB();
-    renderProgress();
+    refreshAfterScoreChange();
   }
   note("Saving…", true);
-  if (local && local.id) {
-    sb.from("entries").update({ value: storeScoreValue(parsed.value), week_label: week }).eq("id", local.id).then(function(r) {
-      if (r.error) note(r.error.message); else done(local.id);
-    });
-    return;
-  }
-  sb.from("entries").select("id,week_label").eq("student_id", sid).eq("skill_id", skid).then(function(chk) {
-    var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, week); });
-    if (hit) sb.from("entries").update({ value: storeScoreValue(parsed.value), week_label: week }).eq("id", hit.id).then(function(r) {
-      if (r.error) note(r.error.message); else done(hit.id);
-    });
-    else sb.from("entries").insert([row]).select("id").then(function(r) {
-      if (r.error) note(r.error.message); else done(r.data && r.data[0] && r.data[0].id);
-    });
+  upsertWeekScore(sid, skid, week, storeScoreValue(parsed.value)).then(done).catch(function(err) {
+    note(err && err.message ? err.message : "Could not save");
   });
 }
 function taSetupNeeded(err) {
