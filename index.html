@@ -1508,42 +1508,71 @@ function applyLocalWeekDelete(sid, skid, week) {
     return typeof e !== "object" || !weekMatches(e.week_label, week);
   });
 }
+function rememberWeekScore(sid, skid, week, value, id) {
+  if (!entries[sid]) entries[sid] = {};
+  if (!entries[sid][skid]) entries[sid][skid] = [];
+  var list = entries[sid][skid];
+  var found = false;
+  for (var j = 0; j < list.length; j++) {
+    if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, week))) {
+      list[j].value = value;
+      found = true;
+    }
+  }
+  if (!found) list.push({ id: id, value: value, week_label: canonicalWeekLabel(week) });
+  dedupeEntries();
+}
+function sortWeekHits(hits) {
+  return (hits || []).slice().sort(function(a, b) {
+    var ta = a.logged_at || "", tb = b.logged_at || "";
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
+}
+function writeWeekHits(hits, value) {
+  var ordered = sortWeekHits(hits);
+  var keep = ordered[ordered.length - 1];
+  var p = Promise.resolve();
+  ordered.forEach(function(h) {
+    p = p.then(function() {
+      return sb.from("entries").update({ value: value }).eq("id", h.id).select("id").then(function(r) {
+        if (r.error) throw r.error;
+        if (!r.data || !r.data.length) throw new Error("Score was not saved.");
+      });
+    });
+  });
+  return p.then(function() {
+    var extras = ordered.slice(0, -1);
+    var d = Promise.resolve();
+    extras.forEach(function(e) {
+      d = d.then(function() { return sb.from("entries").delete().eq("id", e.id); });
+    });
+    return d.then(function() { return keep.id; });
+  });
+}
 function upsertWeekScore(studentId, skillId, week, value) {
   week = canonicalWeekLabel(week);
-  return sb.from("entries").select("id,week_label").eq("student_id", studentId).eq("skill_id", skillId).then(function(chk) {
-    if (chk.error) throw chk.error;
-    var hits = rowsForWeek(chk.data, week);
-    hits.sort(function(a, b) { return (a.week_label === week ? 0 : 1) - (b.week_label === week ? 0 : 1); });
-    var keep = hits[0];
-    var extras = hits.slice(1);
-    function dropExtras(id) {
-      var p = Promise.resolve();
-      extras.forEach(function(e) {
-        p = p.then(function() { return sb.from("entries").delete().eq("id", e.id); });
-      });
-      return p.then(function() { return id; });
-    }
-    if (keep) {
-      return sb.from("entries").update({ value: value }).eq("id", keep.id).then(function(r) {
-        if (r.error) throw r.error;
-        return dropExtras(keep.id);
-      });
-    }
+  function insertFresh() {
     return sb.from("entries").insert([{ student_id: studentId, skill_id: skillId, value: value, week_label: week }]).select("id").then(function(r) {
       if (r.error && isUniqueViolation(r.error)) {
-        return sb.from("entries").select("id,week_label").eq("student_id", studentId).eq("skill_id", skillId).then(function(again) {
+        return sb.from("entries").select("id,week_label,logged_at").eq("student_id", studentId).eq("skill_id", skillId).then(function(again) {
           if (again.error) throw again.error;
-          var hit = rowsForWeek(again.data, week)[0];
-          if (!hit) throw r.error;
-          return sb.from("entries").update({ value: value }).eq("id", hit.id).then(function(u) {
-            if (u.error) throw u.error;
-            return hit.id;
-          });
+          var retry = rowsForWeek(again.data, week);
+          if (!retry.length) throw r.error;
+          return writeWeekHits(retry, value);
         });
       }
       if (r.error) throw r.error;
-      return r.data && r.data[0] && r.data[0].id;
+      var id = r.data && r.data[0] && r.data[0].id;
+      if (!id) throw new Error("Score was not saved.");
+      return id;
     });
+  }
+  return sb.from("entries").select("id,week_label,logged_at").eq("student_id", studentId).eq("skill_id", skillId).then(function(chk) {
+    if (chk.error) throw chk.error;
+    var hits = rowsForWeek(chk.data, week);
+    if (!hits.length) return insertFresh();
+    return writeWeekHits(hits, value);
   });
 }
 function deleteWeekScore(studentId, skillId, week) {
@@ -1554,7 +1583,10 @@ function deleteWeekScore(studentId, skillId, week) {
     var p = Promise.resolve();
     hits.forEach(function(e) {
       p = p.then(function() {
-        return sb.from("entries").delete().eq("id", e.id).then(function(r) { if (r.error) throw r.error; });
+        return sb.from("entries").delete().eq("id", e.id).select("id").then(function(r) {
+          if (r.error) throw r.error;
+          if (!r.data || !r.data.length) throw new Error("Could not remove that score.");
+        });
       });
     });
     return p;
@@ -2027,6 +2059,20 @@ function loadData() {
 
 // The database API returns at most 1000 rows per request. Keep asking for the
 // next page so scores saved after the first thousand still show up on reload.
+function pageRows(queryFn) {
+  var pageSize = 1000;
+  var all = [];
+  function next(from) {
+    return queryFn().range(from, from + pageSize - 1).then(function(r) {
+      if (r.error) return { data: null, error: r.error };
+      var rows = r.data || [];
+      all = all.concat(rows);
+      if (rows.length < pageSize) return { data: all, error: null };
+      return next(from + rows.length);
+    });
+  }
+  return next(0);
+}
 function fetchAllEntries(ids) {
   var pageSize = 1000;
   var all = [];
@@ -2456,42 +2502,14 @@ function submitScores() {
       return;
     }
     var row = rows[i];
-    var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
-    var after = function(id) {
-      if (!entries[row.student_id]) entries[row.student_id] = {};
-      if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
-      var list = entries[row.student_id][row.skill_id];
-      var found = false;
-      for (var j = 0; j < list.length; j++) {
-        if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, row.week_label))) {
-          list[j].value = decodeScoreValue(row.value); list[j].id = id || list[j].id; found = true; break;
-        }
-      }
-      if (!found) list.push({ id: id, value: decodeScoreValue(row.value), week_label: row.week_label });
-      next(i + 1);
-    };
     var fail = function(err) {
       btn.disabled = false; btn.textContent = "Submit Scores";
       alert(err && err.message ? err.message : "Could not save");
     };
-    if (local && local.id) {
-      sb.from("entries").update({ value: row.value }).eq("id", local.id).then(function(r) { if (r.error) fail(r.error); else after(local.id); });
-      return;
-    }
-    sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
-      var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
-      if (hit) sb.from("entries").update({ value: row.value }).eq("id", hit.id).then(function(r) { if (r.error) fail(r.error); else after(hit.id); });
-      else sb.from("entries").insert([row]).select("id").then(function(r) {
-        if (r.error && isUniqueViolation(r.error)) {
-          sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(again) {
-            var againHit = (again.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
-            if (againHit) sb.from("entries").update({ value: row.value }).eq("id", againHit.id).then(function(u) { if (u.error) fail(u.error); else after(againHit.id); });
-            else fail(r.error);
-          });
-        } else if (r.error) fail(r.error);
-        else after(r.data && r.data[0] && r.data[0].id);
-      });
-    });
+    upsertWeekScore(row.student_id, row.skill_id, row.week_label, row.value).then(function(id) {
+      rememberWeekScore(row.student_id, row.skill_id, row.week_label, decodeScoreValue(row.value), id);
+      next(i + 1);
+    }).catch(fail);
   };
   next(0);
 }
@@ -3262,8 +3280,8 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
   note("Saving…", true);
   var local = getEntries(studentId, skid).find(function(e) { return e && e.id === entryId; });
   var week = local && local.week_label ? local.week_label : weekLabel();
-  upsertWeekScore(studentId, skid, week, storeScoreValue(parsed.value)).then(function() {
-    applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
+  upsertWeekScore(studentId, skid, week, storeScoreValue(parsed.value)).then(function(id) {
+    rememberWeekScore(studentId, skid, week, parsed.value, id || entryId);
     openSP(studentId);
     var box = document.getElementById("sp-edit-alert");
     if (box) box.innerHTML = '<div class="alert a-ok">✓ Saved as ' + formatScore(parsed.value, sk) + "</div>";
@@ -3274,10 +3292,10 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
 }
 function teacherDeleteEntry(studentId, entryId, skid) {
   if (!confirm("Delete this score? This cannot be undone.")) return;
-  sb.from("entries").delete().eq("id", entryId).then(function(r) {
-    if (r.error) {
+  sb.from("entries").delete().eq("id", entryId).select("id").then(function(r) {
+    if (r.error || !r.data || !r.data.length) {
       var alertBox = document.getElementById("sp-edit-alert");
-      if (alertBox) alertBox.innerHTML = '<div class="alert a-err">Error: ' + r.error.message + "</div>";
+      if (alertBox) alertBox.innerHTML = '<div class="alert a-err">Error: ' + ((r.error && r.error.message) || "Could not remove that score.") + "</div>";
       return;
     }
     applyLocalEntryDelete(studentId, skid, entryId);
@@ -3294,7 +3312,7 @@ function loadAdmin() {
   Promise.all([
     sb.from("teachers").select("*").order("created_at", {ascending: false}),
     sb.from("students").select("teacher_id"),
-    sb.from("entries").select("student_id, students(teacher_id)")
+    pageRows(function() { return sb.from("entries").select("student_id, students(teacher_id)").order("id"); })
   ]).then(function(results) {
     var teachers = results[0].data || [];
     var sc = {}, ec = {};
@@ -3484,14 +3502,28 @@ function importScores() {
     };
   });
 
-  sb.from("entries").insert(rows).then(function(res) {
-    if (btn) { btn.disabled = false; btn.textContent = "Confirm Import"; }
-    if (res.error) { alertEl("scores-alert", "Import failed: " + res.error.message); return; }
-    cancelScores();
-    loadData();
-    alertEl("scores-alert", "✓ " + rows.length + " scores imported successfully!", "ok");
-    setTimeout(function() { alertEl("scores-alert", ""); }, 5000);
-  });
+  var imported = 0, importFailed = 0, importErr = "";
+  var nextImport = function(i) {
+    if (i >= rows.length) {
+      if (btn) { btn.disabled = false; btn.textContent = "Confirm Import"; }
+      if (importFailed) { alertEl("scores-alert", imported + " imported, " + importFailed + " failed — " + importErr); return; }
+      cancelScores();
+      loadData();
+      alertEl("scores-alert", "✓ " + imported + " scores imported successfully!", "ok");
+      setTimeout(function() { alertEl("scores-alert", ""); }, 5000);
+      return;
+    }
+    var row = rows[i];
+    upsertWeekScore(row.student_id, row.skill_id, row.week_label, row.value).then(function() {
+      imported++;
+      nextImport(i + 1);
+    }).catch(function(err) {
+      importFailed++;
+      if (!importErr) importErr = err && err.message ? err.message : "Could not save";
+      nextImport(i + 1);
+    });
+  };
+  nextImport(0);
 }
 
 function cancelScores() {
@@ -3627,31 +3659,15 @@ function saveGrid() {
       }
       return;
     }
-    // Check if entry exists for this week, then update or insert
-    (function(row) {
-      sb.from("entries")
-        .select("id,week_label")
-        .eq("student_id", row.student_id)
-        .eq("skill_id",   row.skill_id)
-        .then(function(chk) {
-          var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
-          var op = hit
-            ? sb.from("entries").update({ value: row.value }).eq("id", hit.id)
-            : sb.from("entries").insert([row]);
-          op.then(function(res) {
-            if (res.error) {
-              failed++;
-              if (!firstErr) firstErr = res.error.message;
-            } else {
-              saved++;
-              if (!entries[row.student_id]) entries[row.student_id] = {};
-              if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
-              entries[row.student_id][row.skill_id].push(row.value);
-            }
-            next(i + 1);
-          });
-        });
-    })(rows[i]);
+    var row = rows[i];
+    upsertWeekScore(row.student_id, row.skill_id, row.week_label, row.value).then(function() {
+      saved++;
+      next(i + 1);
+    }).catch(function(err) {
+      failed++;
+      if (!firstErr) firstErr = err && err.message ? err.message : "Could not save";
+      next(i + 1);
+    });
   };
   next(0);
 }
@@ -4326,8 +4342,8 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
   note("Saving…", true);
   var local = getEntries(studentId, skid).find(function(e) { return e && e.id === entryId; });
   var week = local && local.week_label ? local.week_label : weekLabel();
-  upsertWeekScore(studentId, skid, week, storeScoreValue(parsed.value)).then(function() {
-    applyLocalEntryUpdate(studentId, skid, entryId, parsed.value);
+  upsertWeekScore(studentId, skid, week, storeScoreValue(parsed.value)).then(function(id) {
+    rememberWeekScore(studentId, skid, week, parsed.value, id || entryId);
     openSP(studentId);
     var box = document.getElementById("sp-edit-alert");
     if (box) box.innerHTML = '<div class="alert a-ok">✓ Saved as ' + formatScore(parsed.value, sk) + "</div>";
@@ -4338,10 +4354,10 @@ function teacherSaveEntry(studentId, entryId, skid, inputId) {
 }
 function teacherDeleteEntry(studentId, entryId, skid) {
   if (!confirm("Delete this score? This cannot be undone.")) return;
-  sb.from("entries").delete().eq("id", entryId).then(function(r) {
-    if (r.error) {
+  sb.from("entries").delete().eq("id", entryId).select("id").then(function(r) {
+    if (r.error || !r.data || !r.data.length) {
       var alertBox = document.getElementById("sp-edit-alert");
-      if (alertBox) alertBox.innerHTML = '<div class="alert a-err">Error: ' + r.error.message + "</div>";
+      if (alertBox) alertBox.innerHTML = '<div class="alert a-err">Error: ' + ((r.error && r.error.message) || "Could not remove that score.") + "</div>";
       return;
     }
     applyLocalEntryDelete(studentId, skid, entryId);
@@ -4358,7 +4374,7 @@ function loadAdmin() {
   Promise.all([
     sb.from("teachers").select("*").order("created_at", {ascending: false}),
     sb.from("students").select("teacher_id"),
-    sb.from("entries").select("student_id, students(teacher_id)")
+    pageRows(function() { return sb.from("entries").select("student_id, students(teacher_id)").order("id"); })
   ]).then(function(results) {
     var teachers = results[0].data || [];
     var sc = {}, ec = {};
@@ -4548,14 +4564,28 @@ function importScores() {
     };
   });
 
-  sb.from("entries").insert(rows).then(function(res) {
-    if (btn) { btn.disabled = false; btn.textContent = "Confirm Import"; }
-    if (res.error) { alertEl("scores-alert", "Import failed: " + res.error.message); return; }
-    cancelScores();
-    loadData();
-    alertEl("scores-alert", "✓ " + rows.length + " scores imported successfully!", "ok");
-    setTimeout(function() { alertEl("scores-alert", ""); }, 5000);
-  });
+  var imported = 0, importFailed = 0, importErr = "";
+  var nextImport = function(i) {
+    if (i >= rows.length) {
+      if (btn) { btn.disabled = false; btn.textContent = "Confirm Import"; }
+      if (importFailed) { alertEl("scores-alert", imported + " imported, " + importFailed + " failed — " + importErr); return; }
+      cancelScores();
+      loadData();
+      alertEl("scores-alert", "✓ " + imported + " scores imported successfully!", "ok");
+      setTimeout(function() { alertEl("scores-alert", ""); }, 5000);
+      return;
+    }
+    var row = rows[i];
+    upsertWeekScore(row.student_id, row.skill_id, row.week_label, row.value).then(function() {
+      imported++;
+      nextImport(i + 1);
+    }).catch(function(err) {
+      importFailed++;
+      if (!importErr) importErr = err && err.message ? err.message : "Could not save";
+      nextImport(i + 1);
+    });
+  };
+  nextImport(0);
 }
 
 function cancelScores() {
@@ -4691,30 +4721,16 @@ function saveGrid() {
       }
       return;
     }
-    // Check if entry exists for this week, then update or insert
-    sb.from("entries")
-      .select("id,week_label")
-      .eq("student_id", rows[i].student_id)
-      .eq("skill_id",   rows[i].skill_id)
-      .then(function(chk) {
-        var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, rows[i].week_label); });
-        var op = hit
-          ? sb.from("entries").update({ value: rows[i].value }).eq("id", hit.id)
-          : sb.from("entries").insert([rows[i]]);
-        op.then(function(res) {
-          if (res.error) {
-            failed++;
-            if (!firstErr) firstErr = res.error.message;
-            console.error("Save failed:", rows[i], res.error.message);
-          } else {
-            saved++;
-            if (!entries[rows[i].student_id]) entries[rows[i].student_id] = {};
-            if (!entries[rows[i].student_id][rows[i].skill_id]) entries[rows[i].student_id][rows[i].skill_id] = [];
-            entries[rows[i].student_id][rows[i].skill_id].push(rows[i].value);
-          }
-          next(i + 1);
-        });
-      });
+    var row = rows[i];
+    upsertWeekScore(row.student_id, row.skill_id, row.week_label, row.value).then(function() {
+      saved++;
+      next(i + 1);
+    }).catch(function(err) {
+      failed++;
+      if (!firstErr) firstErr = err && err.message ? err.message : "Could not save";
+      console.error("Save failed:", row, firstErr);
+      next(i + 1);
+    });
   };
   next(0);
 }
@@ -4811,8 +4827,8 @@ function editEntry(entryId, skid, currentValue, weekLabel) {
   var parsed = parsedIn.value;
 
   alertEl("edit-alert", "Saving…", "ok");
-  sb.from("entries").update({ value: storeScoreValue(parsed) }).eq("id", entryId).then(function(r) {
-    if (r.error) { alertEl("edit-alert", "Error: " + r.error.message); return; }
+  sb.from("entries").update({ value: storeScoreValue(parsed) }).eq("id", entryId).select("id").then(function(r) {
+    if (r.error || !r.data || !r.data.length) { alertEl("edit-alert", "Error: " + ((r.error && r.error.message) || "Score was not saved.")); return; }
     // Update local cache
     var raw = entries[portalStudent.id] && entries[portalStudent.id][skid];
     if (raw) {
@@ -5349,17 +5365,7 @@ function saveRecordEdit(sid) {
   var parsed = parseTimeInput(inp.value, sk);
   if (!parsed.ok) { note(parsed.error || "Invalid score"); return; }
   function done(id) {
-    if (!entries[sid]) entries[sid] = {};
-    if (!entries[sid][skid]) entries[sid][skid] = [];
-    var list = entries[sid][skid];
-    var found = false;
-    for (var j = 0; j < list.length; j++) {
-      if (typeof list[j] === "object" && (list[j].id === id || weekMatches(list[j].week_label, week))) {
-        list[j].value = parsed.value; list[j].id = id || list[j].id; found = true; break;
-      }
-    }
-    if (!found) list.push({ id: id, value: parsed.value, week_label: week });
-    dedupeEntries();
+    rememberWeekScore(sid, skid, week, parsed.value, id);
     note("✓ " + formatScore(parsed.value, sk) + " saved", true);
     refreshAfterScoreChange();
   }

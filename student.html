@@ -1018,9 +1018,9 @@ function savePastScore(entryId, skid, inputId) {
     if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + (parsed.error || "Invalid score") + "</div>";
     return;
   }
-  sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", entryId).then(function(r) {
-    if (r.error) {
-      if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + r.error.message + "</div>";
+  sb.from("entries").update({ value: storeScoreValue(parsed.value) }).eq("id", entryId).select("id").then(function(r) {
+    if (r.error || !r.data || !r.data.length) {
+      if (alertBox) alertBox.innerHTML = '<div class="alert alert-error">' + ((r.error && r.error.message) || "Score was not saved.") + "</div>";
       return;
     }
     var list = getEntries(selectedStudent.id, skid);
@@ -1039,40 +1039,48 @@ function applyLocalEntry(row, id) {
   for (var i = 0; i < list.length; i++) {
     if (typeof list[i] === "object" && (list[i].id === id || weekMatches(list[i].week_label, row.week_label))) {
       list[i].value = decodeScoreValue(row.value);
-      list[i].id = id || list[i].id;
-      list[i].week_label = row.week_label;
       found = true;
-      break;
     }
   }
   if (!found) list.push({ id: id, value: decodeScoreValue(row.value), week_label: row.week_label });
   dedupeEntries();
 }
 function upsertScoreRow(row) {
-  var local = findWeekEntry(row.student_id, row.skill_id, row.week_label);
-  function doUpdate(id) {
-    return sb.from("entries").update({ value: row.value }).eq("id", id).then(function(r) {
-      if (r.error) throw r.error;
-      applyLocalEntry(row, id);
+  function writeHits(hits) {
+    var ordered = hits.slice().sort(function(a, b) {
+      var ta = a.logged_at || "", tb = b.logged_at || "";
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      return String(a.id || "").localeCompare(String(b.id || ""));
     });
+    var p = Promise.resolve();
+    ordered.forEach(function(h) {
+      p = p.then(function() {
+        return sb.from("entries").update({ value: row.value }).eq("id", h.id).select("id").then(function(r) {
+          if (r.error) throw r.error;
+          if (!r.data || !r.data.length) throw new Error("Score was not saved.");
+        });
+      });
+    });
+    return p.then(function() { applyLocalEntry(row, ordered[ordered.length - 1].id); });
   }
-  function doInsert() {
+  return sb.from("entries").select("id,week_label,logged_at").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
+    if (chk.error) throw chk.error;
+    var hits = (chk.data || []).filter(function(e) { return weekMatches(e.week_label, row.week_label); });
+    if (hits.length) return writeHits(hits);
     return sb.from("entries").insert([row]).select("id").then(function(r) {
       if (r.error && /duplicate key|unique constraint/i.test(r.error.message || "")) {
-        return sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
-          var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
-          if (!hit) throw r.error;
-          return doUpdate(hit.id);
+        return sb.from("entries").select("id,week_label,logged_at").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(again) {
+          if (again.error) throw again.error;
+          var retry = (again.data || []).filter(function(e) { return weekMatches(e.week_label, row.week_label); });
+          if (!retry.length) throw r.error;
+          return writeHits(retry);
         });
       }
       if (r.error) throw r.error;
-      applyLocalEntry(row, r.data && r.data[0] && r.data[0].id);
+      var id = r.data && r.data[0] && r.data[0].id;
+      if (!id) throw new Error("Score was not saved.");
+      applyLocalEntry(row, id);
     });
-  }
-  if (local && local.id) return doUpdate(local.id);
-  return sb.from("entries").select("id,week_label").eq("student_id", row.student_id).eq("skill_id", row.skill_id).then(function(chk) {
-    var hit = (chk.data || []).find(function(e) { return weekMatches(e.week_label, row.week_label); });
-    return hit ? doUpdate(hit.id) : doInsert();
   });
 }
 function submitScores() {
