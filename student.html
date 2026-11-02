@@ -599,6 +599,31 @@ function showClassPicker() {
     show("screen-error");
   });
 }
+// The database API returns at most 1000 rows per request. Keep asking for the
+// next page so scores saved after the first thousand still show up on reload.
+function fetchAllEntries(ids) {
+  var pageSize = 1000;
+  var all = [];
+  var seen = {};
+  if (!ids || !ids.length) return Promise.resolve({ data: [], error: null });
+  function next(from) {
+    return sb.from("entries").select("*").in("student_id", ids).order("logged_at").order("id").range(from, from + pageSize - 1).then(function(r) {
+      if (r.error) return { data: null, error: r.error };
+      var rows = r.data || [];
+      var added = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var id = rows[i].id;
+        if (id && seen[id]) continue;
+        if (id) seen[id] = true;
+        all.push(rows[i]);
+        added++;
+      }
+      if (rows.length < pageSize || !added) return { data: all, error: null };
+      return next(from + rows.length);
+    });
+  }
+  return next(0);
+}
 function bootStudent() {
   if (!teacherId) {
     showClassPicker();
@@ -624,7 +649,7 @@ function bootStudent() {
       return;
     }
     var ids = students.map(function(s) { return s.id; });
-    return sb.from("entries").select("*").in("student_id", ids).order("logged_at").then(function(er) {
+    return fetchAllEntries(ids).then(function(er) {
       (er.data || []).forEach(function(e) {
         if (!entries[e.student_id]) entries[e.student_id] = {};
         if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
