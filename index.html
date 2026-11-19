@@ -353,20 +353,40 @@ tr:hover td{background:rgba(255,255,255,0.03)}
 #pane-teams .bracket-scroll{overflow-x:auto;padding-bottom:6px}
 #pane-teams .bracket-cols{display:flex;gap:14px;align-items:flex-start;min-width:max-content}
 #pane-teams .bracket-col{display:flex;flex-direction:column;gap:10px;min-width:200px}
-#pane-teams .bracket-round-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gold2);margin:2px 0 4px}
-#pane-teams .bracket-match{border:1px solid rgba(255,255,255,0.14);border-radius:10px;overflow:hidden;background:rgba(255,255,255,0.03)}
+#pane-teams .bracket-round-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-dark);margin:2px 0 4px}
+#pane-teams .bracket-match{border:1px solid rgba(30,35,64,0.2);border-radius:10px;overflow:hidden;background:#fff}
 #pane-teams button.bracket-slot,
 #pane-teams .bracket-slot{
   display:flex;justify-content:space-between;gap:8px;align-items:center;width:100%;
-  text-align:left;background:transparent;color:var(--text-light);
-  border:0;border-radius:0;border-top:1px solid rgba(255,255,255,0.08);
-  box-shadow:none;padding:8px 10px;font-size:13px;font-weight:500;transform:none;cursor:pointer;
+  text-align:left;background:#fff;color:var(--text-dark);
+  border:0;border-radius:0;border-top:1px solid rgba(30,35,64,0.12);
+  box-shadow:none;padding:8px 10px;font-size:13px;font-weight:600;transform:none;cursor:pointer;
 }
 #pane-teams .bracket-match>.bracket-slot:first-child{border-top:0}
-#pane-teams button.bracket-slot:hover{background:rgba(201,168,76,0.14);color:var(--text-light);transform:none;box-shadow:none}
+#pane-teams button.bracket-slot:hover{background:#f6efd4;color:var(--text-dark);transform:none;box-shadow:none}
 #pane-teams button.bracket-slot:active{transform:none}
-#pane-teams .bracket-slot.win{background:rgba(201,168,76,0.2);color:var(--gold2);font-weight:700}
-#pane-teams .bracket-champ{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--gold2);margin:12px 0 4px}
+#pane-teams .bracket-slot.win{background:#1E2340;color:#F0EDE8;font-weight:700}
+#pane-teams .bracket-champ{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--text-dark);margin:12px 0 4px}
+#pane-teams .rr-wrap{overflow-x:auto;margin-top:10px}
+#pane-teams table.rr-grid{width:max-content;min-width:100%;border-collapse:collapse;background:#fff;color:var(--text-dark)}
+#pane-teams table.rr-grid th,#pane-teams table.rr-grid td{
+  border:1px solid rgba(30,35,64,0.18);padding:0;text-align:center;color:var(--text-dark);
+  background:#fff;font-size:13px;letter-spacing:0;text-transform:none;min-width:64px;
+}
+#pane-teams table.rr-grid th{padding:8px 10px;font-weight:700;background:#f4f1ea;white-space:nowrap}
+#pane-teams table.rr-grid tbody th{text-align:left}
+#pane-teams table.rr-grid thead th{text-align:center;font-size:12px}
+#pane-teams table.rr-grid td.rr-self,#pane-teams table.rr-grid tr:hover td.rr-self{background:#eceae4;color:var(--text-dark2)}
+#pane-teams table.rr-grid tr:hover td{background:#fff}
+#pane-teams button.rr-cell{
+  width:100%;min-height:42px;border:0;border-radius:0;background:#fff;color:var(--text-dark2);
+  box-shadow:none;font-weight:700;padding:8px 6px;transform:none;
+}
+#pane-teams button.rr-cell:hover{background:#f6efd4;color:var(--text-dark);transform:none;box-shadow:none}
+#pane-teams button.rr-cell.win{background:#1E2340;color:#F0EDE8}
+#pane-teams button.rr-cell.loss{background:#f6efd4;color:var(--text-dark)}
+#pane-teams .rr-help,#pane-teams .rr-bye{font-size:12px;color:var(--text-dark2);margin:8px 0}
+#bracket-result > .team-meta{color:var(--text-dark2)}
 
 /* ── Login inputs — force dark text ────────────────────────── */
 #login-email,
@@ -4989,7 +5009,10 @@ function makeBrackets() {
     if (printBtn) printBtn.disabled = true;
     return;
   }
-  alertEl("bracket-alert", errors.concat(["Tap a team to mark the winner. Tap that team again to undo."]).join(" "), errors.length ? "err" : "ok");
+  var tapNote = options.format === "robin"
+    ? "Tap a square to give that row the win. Tap the W again to clear it."
+    : "Tap a team to mark the winner. Tap that team again to undo.";
+  alertEl("bracket-alert", errors.concat([tapNote]).join(" "), errors.length ? "err" : "ok");
   renderBrackets();
 }
 function bracketSlotText(slot) {
@@ -5027,14 +5050,77 @@ function bracketSeedsHtml(entrants, bySkill) {
       (bits.length ? '<div class="team-meta">' + teamsEsc(bits.join(" · ")) + "</div>" : "") + "</div>";
   }).join("") + "</div>";
 }
-function bracketRobinHtml(eventIndex, rounds) {
-  return (rounds || []).map(function(round) {
-    var byes = round.byes && round.byes.length
-      ? '<div class="team-meta">Bye: ' + teamsEsc(round.byes.map(function(team) { return team.name; }).join(", ")) + "</div>"
-      : "";
-    return '<div class="card" style="margin-top:10px"><div class="bracket-round-title">' + teamsEsc(round.title) + "</div>" +
-      round.matches.map(function(match) { return bracketMatchHtml(eventIndex, match); }).join("") + byes + "</div>";
+function bracketRobinPairs(group) {
+  var pairs = {};
+  (group.robin || []).forEach(function(round) {
+    (round.matches || []).forEach(function(match) {
+      if (!match.a.id || !match.b.id) return;
+      pairs[match.a.id + "|" + match.b.id] = match;
+      pairs[match.b.id + "|" + match.a.id] = match;
+    });
+  });
+  return pairs;
+}
+function bracketRobinGridHtml(eventIndex, group) {
+  var teams = group.entrants || [];
+  var pairs = bracketRobinPairs(group);
+  var head = "<th></th>" + teams.map(function(team) {
+    return "<th>" + teamsEsc(team.seed + " " + team.name) + "</th>";
   }).join("");
+  var body = teams.map(function(row) {
+    var cells = teams.map(function(col) {
+      if (row.id === col.id) return '<td class="rr-self">—</td>';
+      var match = pairs[row.id + "|" + col.id];
+      if (!match) return "<td></td>";
+      var won = match.status === "done" && match.winnerId === row.id;
+      var lost = match.status === "done" && match.winnerId && match.winnerId !== row.id;
+      var cls = "rr-cell" + (won ? " win" : lost ? " loss" : "");
+      return '<td><button type="button" class="' + cls + '" data-event="' + eventIndex + '" data-match="' + teamsEsc(match.id) + '" data-bracket-pick="' + teamsEsc(row.id) + '">' + (won ? "W" : lost ? "L" : "·") + "</button></td>";
+    }).join("");
+    return "<tr><th>" + teamsEsc(row.seed + " " + row.name) + "</th>" + cells + "</tr>";
+  }).join("");
+  var byes = [];
+  (group.robin || []).forEach(function(round) {
+    if (round.byes && round.byes.length) byes.push(round.title + ": " + round.byes.map(function(team) { return team.name; }).join(", "));
+  });
+  return '<div class="rr-wrap"><table class="rr-grid"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table></div>" +
+    (byes.length ? '<div class="rr-bye">Bye — ' + teamsEsc(byes.join(" · ")) + "</div>" : "") +
+    '<div class="rr-help">Rows play columns. Tap a square to give that row the win.</div>';
+}
+function bracketRobinText(group) {
+  var teams = group.entrants || [];
+  var pairs = bracketRobinPairs(group);
+  var rows = [];
+  rows.push([""].concat(teams.map(function(team) { return team.seed + " " + team.name; })));
+  teams.forEach(function(row) {
+    var line = [row.seed + " " + row.name];
+    teams.forEach(function(col) {
+      if (row.id === col.id) { line.push("—"); return; }
+      var match = pairs[row.id + "|" + col.id];
+      if (!match) line.push("");
+      else if (match.status === "done" && match.winnerId === row.id) line.push("W");
+      else if (match.status === "done" && match.winnerId) line.push("L");
+      else line.push("·");
+    });
+    rows.push(line);
+  });
+  var widths = [];
+  rows.forEach(function(line) {
+    line.forEach(function(cell, i) { widths[i] = Math.max(widths[i] || 0, String(cell).length); });
+  });
+  var text = rows.map(function(line) {
+    return line.map(function(cell, i) {
+      var s = String(cell);
+      while (s.length < widths[i]) s += " ";
+      return s;
+    }).join("  ");
+  }).join("\n");
+  var byes = [];
+  (group.robin || []).forEach(function(round) {
+    if (round.byes && round.byes.length) byes.push(round.title + ": " + round.byes.map(function(team) { return team.name; }).join(", "));
+  });
+  if (byes.length) text += "\nBye — " + byes.join(" · ");
+  return text;
 }
 function bracketStandingsHtml(rows, bySkill) {
   if (!rows || !rows.length) return "";
@@ -5120,13 +5206,8 @@ function renderBrackets() {
         lines.push("");
       }
       if (group.robin.length) {
-        html.push(bracketRobinHtml(eventIndex, group.robin));
-        group.robin.forEach(function(round) {
-          lines.push(round.title);
-          round.matches.forEach(function(match) { lines.push(bracketMatchLine(match)); });
-          if (round.byes && round.byes.length) lines.push("Bye: " + round.byes.map(function(team) { return team.name; }).join(", "));
-          lines.push("");
-        });
+        html.push(bracketRobinGridHtml(eventIndex, group));
+        lines.push(bracketRobinText(group), "");
         html.push(bracketStandingsHtml(group.standings, view.bySkill));
         if (group.standings.length) {
           lines.push("Standings");
@@ -5205,7 +5286,11 @@ function printBrackets() {
     + ".bracket-round-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin:8px 0 4px}"
     + ".bracket-match{border:1px solid #ccc;border-radius:8px;margin:0 0 10px;page-break-inside:avoid}"
     + ".bracket-slot,button.bracket-slot{display:block;width:100%;text-align:left;background:#fff;color:#1a1e38;border:0;border-top:1px solid #eee;padding:6px 8px;font:13px sans-serif}"
-    + ".bracket-slot.win{background:#f6efd4;font-weight:700}.bracket-champ{font-size:18px;font-weight:700;margin:12px 0}"
+    + ".bracket-slot.win{background:#1a1e38;color:#f0ede8;font-weight:700}.bracket-champ{font-size:18px;font-weight:700;margin:12px 0;color:#1a1e38}"
+    + ".rr-wrap{overflow:visible}table.rr-grid{border-collapse:collapse;margin-top:8px}table.rr-grid th,table.rr-grid td{border:1px solid #ccc;padding:6px 8px;text-align:center;color:#1a1e38;background:#fff}"
+    + "table.rr-grid th{background:#f4f1ea;text-align:left}table.rr-grid thead th{text-align:center}td.rr-self{background:#eceae4}"
+    + "button.rr-cell{border:0;background:#fff;color:#1a1e38;font-weight:700}button.rr-cell.win{background:#1a1e38;color:#f0ede8}button.rr-cell.loss{background:#f6efd4}"
+    + ".rr-help,.rr-bye{font-size:12px;color:#555;margin:8px 0}"
     + "</style></head><body><h1>VikingStrong bracket</h1>" + lastBracketPrint + "</body></html>");
   w.document.close();
   w.focus();
