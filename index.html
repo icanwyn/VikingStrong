@@ -684,7 +684,7 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
       <!-- MARKS — period roster as a pad board -->
       <div id="pane-marks" class="hidden">
         <div id="marks-periods">
-          <div class="mark-intro">Tap a period. Names open as large tiles, A–Z by first name. <strong>Boys are blue. Girls are gold.</strong> Then pick a unit and mark skill level, loaner clothes, tardies, and behavior.</div>
+          <div class="mark-intro">Tap a period. Names open as large tiles, A–Z by first name. <strong>Boys are blue. Girls are gold.</strong> Pick a sport, rate each skill from 1 to 4, and mark loaner clothes, tardies, and behavior.</div>
           <div id="marks-period-grid" class="mark-period-grid"></div>
         </div>
         <div id="marks-board" class="hidden">
@@ -697,15 +697,23 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
           </div>
           <div class="mark-legend"><span><i class="boy"></i>Boys</span><span><i class="girl"></i>Girls</span><span>Sorted A–Z by first name</span></div>
           <div class="mark-toolbar">
+            <span style="font-size:12px;color:var(--text2)">Sports</span>
+            <div id="marks-sports" class="mark-chiprow"></div>
+          </div>
+          <div class="mark-toolbar">
             <div id="marks-units" class="mark-chiprow"></div>
-            <input id="marks-unit-name" placeholder="New unit, e.g. Basketball" aria-label="Unit name"/>
+            <input id="marks-unit-name" placeholder="Or type a unit, e.g. Kickball" aria-label="Unit name"/>
             <button type="button" data-act="add-unit">Add unit</button>
             <button type="button" data-act="rename-unit">Rename</button>
             <button type="button" data-act="delete-unit">Delete unit</button>
           </div>
           <div class="mark-toolbar">
             <div id="marks-kinds" class="mark-chiprow"></div>
-            <input id="marks-kind-name" placeholder="Add a mark, e.g. Participation" aria-label="New mark name"/>
+          </div>
+          <div class="mark-toolbar">
+            <input id="marks-skill-name" placeholder="Add a skill, e.g. Passing" aria-label="New skill name"/>
+            <button type="button" data-act="add-skill">Add skill</button>
+            <input id="marks-kind-name" placeholder="Add a daily mark, e.g. Participation" aria-label="New mark name"/>
             <button type="button" data-act="add-kind">Add mark</button>
           </div>
           <div id="marks-hint" class="mark-hint"></div>
@@ -4706,6 +4714,6 @@ function goAdminTab(t) {
   });
 }
 </script>
-<script src="marks.js?v=1"></script>
+<script src="marks.js?v=2"></script>
 </body>
 </html>
