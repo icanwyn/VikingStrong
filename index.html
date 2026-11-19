@@ -591,6 +591,8 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
 .mark-dock .rowline{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .mark-dock button{width:auto}
 .mark-dock button.on{background:var(--card);color:var(--gold2);border-color:var(--card);font-weight:700}
+.mark-dock .skill-block{margin-top:12px}
+.mark-dock .skill-block .mark-hint{margin:0 0 2px;font-weight:700;color:var(--text-dark)}
 .mark-dock textarea{
   width:100%;margin-top:8px;border-radius:10px;border:1px solid rgba(30,35,64,.15);
   padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text-dark);background:#fff
@@ -717,7 +719,7 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
       <!-- MARKS — period roster as a pad board -->
       <div id="pane-marks" class="hidden">
         <div id="marks-periods">
-          <div class="mark-intro">Tap a period. Names open as large tiles, A–Z by first name. <strong>Boys are blue. Girls are gold.</strong> Pick a sport, rate each skill from 1 to 4, and mark loaner clothes, tardies, and behavior.</div>
+          <div class="mark-intro">Tap a period. Names open as large tiles, A–Z by first name. <strong>Boys are blue. Girls are gold.</strong> Pick a sport. Use <strong>Mark, then names</strong> to rate one skill across the class, or <strong>Name, then marks</strong> to open a student and choose their ratings.</div>
           <div id="marks-period-grid" class="mark-period-grid"></div>
         </div>
         <div id="marks-board" class="hidden">
@@ -739,6 +741,11 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
             <button type="button" data-act="add-unit">Add unit</button>
             <button type="button" data-act="rename-unit">Rename</button>
             <button type="button" data-act="delete-unit">Delete unit</button>
+          </div>
+          <div class="mark-toolbar">
+            <span style="font-size:12px;color:var(--text2)">Order</span>
+            <button type="button" class="mark-tool on" id="marks-order-mark" data-act="order" data-order="mark">Mark, then names</button>
+            <button type="button" class="mark-tool" id="marks-order-student" data-act="order" data-order="student">Name, then marks</button>
           </div>
           <div class="mark-toolbar">
             <div id="marks-kinds" class="mark-chiprow"></div>
@@ -5624,6 +5631,6 @@ function goAdminTab(t) {
   });
 }
 </script>
-<script src="marks.js?v=2"></script>
+<script src="marks.js?v=3"></script>
 </body>
 </html>

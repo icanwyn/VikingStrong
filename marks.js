@@ -70,6 +70,7 @@ var markPeriod = "";
 var markUnitId = "";
 var markKind = "skill";
 var markFocus = "";
+var markOrder = "mark";
 var markRestored = false;
 var markCatalogCache = null;
 var markSaveChain = {};
@@ -284,14 +285,19 @@ function currentTool() {
   return pick;
 }
 function toolHint(tool) {
-  if (!tool) return "";
   if (!selectedUnit()) return "Pick a sport, or type a unit name. Each sport has its own skills to rate from 1 to 4.";
-  if (tool.mode === "level" && tool.skillId) return "Tap a student, then rate " + tool.label + " from 1 Beginning to 4 Advanced.";
+  if (markOrder === "student") {
+    return markFocus
+      ? "Choose this student’s skill ratings and today’s marks below."
+      : "Tap a student’s name first, then choose the skill ratings and today’s marks.";
+  }
+  if (!tool) return "";
+  if (tool.mode === "level" && tool.skillId) return "This mark is selected. Tap a student, then rate " + tool.label + " from 1 Beginning to 4 Advanced.";
   if (tool.mode === "level") return "Pick a sport above to rate skills such as dribbling, passing, shooting, or the serve.";
-  if (tool.mode === "behavior") return "Tap a student, then pick today’s behavior.";
-  if (tool.id === "loaner") return "Tap a name to mark loaner clothes today (not wearing P.E. clothes). Tap again to clear.";
-  if (tool.id === "tardy") return "Tap a name to mark a tardy today. Tap again to clear.";
-  return "Tap a name to mark " + tool.label + " today. Tap again to clear.";
+  if (tool.mode === "behavior") return "Behavior is selected. Tap a student, then pick today’s behavior.";
+  if (tool.id === "loaner") return "Loaner is selected. Tap a name to mark loaner clothes today (not wearing P.E. clothes). Tap again to clear.";
+  if (tool.id === "tardy") return "Tardy is selected. Tap a name to mark a tardy today. Tap again to clear.";
+  return tool.label + " is selected. Tap a name to mark it today. Tap again to clear.";
 }
 function skillScore(slot, tool) {
   if (!slot || !tool || tool.mode !== "level") return "";
@@ -375,7 +381,7 @@ function flagDates(student, unitId, tool) {
 function rememberSession() {
   try {
     sessionStorage.setItem("vs-mark-session", JSON.stringify({
-      period: markPeriod, unit: markUnitId, kind: markKind
+      period: markPeriod, unit: markUnitId, kind: markKind, order: markOrder
     }));
   } catch (e) {}
 }
@@ -388,6 +394,7 @@ function restoreSession() {
     if (!markPeriod && saved.period) markPeriod = String(saved.period);
     if (!markUnitId && saved.unit) markUnitId = String(saved.unit);
     if (saved.kind) markKind = String(saved.kind);
+    if (saved.order === "student" || saved.order === "mark") markOrder = saved.order;
   } catch (e) {}
 }
 function requireUnit() {
@@ -547,6 +554,10 @@ function renderMarkChrome() {
   }
   var hint = document.getElementById("marks-hint");
   if (hint) hint.textContent = toolHint(currentTool());
+  var markBtn = document.getElementById("marks-order-mark");
+  var studentBtn = document.getElementById("marks-order-student");
+  if (markBtn) markBtn.classList.toggle("on", markOrder !== "student");
+  if (studentBtn) studentBtn.classList.toggle("on", markOrder === "student");
 }
 function padHtml(s, unit, tool, dayKey) {
   var tone = markTone(s);
@@ -629,11 +640,47 @@ function dateLine(dates) {
   var extra = dates.length > 8 ? " +" + (dates.length - 8) + " earlier" : "";
   return shown + extra + " · " + dates.length + " total";
 }
+function levelButtons(rated, skillAttr) {
+  return MARK_LEVELS.map(function(level) {
+    var on = rated === level.id ? " on" : "";
+    return '<button type="button" class="' + on + '" data-act="level" data-level="' + level.id + '"' + skillAttr + '>' + level.id + " " + level.name + "</button>";
+  }).join("");
+}
+function studentMarksHtml(slot, day) {
+  var html = "";
+  var skills = unitSkills(selectedUnit());
+  if (skills.length) {
+    skills.forEach(function(sk) {
+      var rated = slot.skills && slot.skills[sk.id] ? String(slot.skills[sk.id]) : "";
+      html += '<div class="skill-block"><div class="mark-hint">' + escHtml(sk.name) + "</div><div class=\"rowline\">" +
+        levelButtons(rated, ' data-skill="' + escHtml(sk.id) + '"') +
+        '<button type="button" data-act="clear-skill" data-skill="' + escHtml(sk.id) + '">Clear</button></div></div>';
+    });
+  } else {
+    html += '<div class="skill-block"><div class="mark-hint">Skill level</div><div class="rowline">' +
+      levelButtons(slot.skill ? String(slot.skill) : "", ' data-skill=""') +
+      '<button type="button" data-act="clear-skill" data-skill="">Clear</button></div></div>';
+  }
+  html += '<div class="skill-block"><div class="mark-hint">Today</div><div class="rowline">';
+  markTools().forEach(function(tool) {
+    if (tool.mode !== "toggle") return;
+    var on = flagOn(day, tool) ? " on" : "";
+    html += '<button type="button" class="' + on + '" data-act="flag" data-kind="' + escHtml(tool.id) + '">' + escHtml(tool.label) + "</button>";
+  });
+  html += "</div></div>";
+  html += '<div class="skill-block"><div class="mark-hint">Behavior</div><div class="rowline">' + MARK_BEHAVIORS.map(function(b) {
+    var on = day.behavior === b.id ? " on" : "";
+    return '<button type="button" class="' + on + '" data-act="behavior" data-code="' + b.id + '">' + b.name + "</button>";
+  }).join("") + '<button type="button" data-act="clear-behavior">Clear today</button></div>';
+  html += '<textarea id="marks-behavior-note" rows="2" placeholder="Behavior note for today">' + escHtml(day.behaviorNote || "") + "</textarea></div>";
+  return html;
+}
 function renderMarkDock() {
   var dock = document.getElementById("marks-dock");
   if (!dock) return;
+  var dockKind = markOrder === "student" ? "student" : markKind;
   var typing = dock.contains(document.activeElement) && (document.activeElement.tagName === "TEXTAREA" || document.activeElement.tagName === "INPUT");
-  if (typing && dock.getAttribute("data-sid") === markFocus && dock.getAttribute("data-kind") === markKind) return;
+  if (typing && dock.getAttribute("data-sid") === markFocus && dock.getAttribute("data-kind") === dockKind) return;
   if (!markFocus) { dock.classList.add("hidden"); dock.innerHTML = ""; return; }
   var s = markStudent(markFocus);
   var unit = selectedUnit();
@@ -644,7 +691,8 @@ function renderMarkDock() {
   var day = (slot.days && slot.days[dayKey]) || {};
   var html = '<div class="row" style="justify-content:space-between;align-items:flex-start"><div><div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#8A7040">Period ' + escHtml(markPeriod) + " · " + escHtml(unit.name) + '</div><h3>' + escHtml(markBigName(s)) + " " + escHtml(String(s.last || "")) + "</h3></div>" +
     '<button type="button" data-act="unfocus">Close</button></div>';
-  if (tool.mode === "level") {
+  if (markOrder === "student") html += studentMarksHtml(slot, day);
+  else if (tool.mode === "level") {
     var rated = skillScore(slot, tool);
     html += '<div class="mark-hint" style="margin-bottom:8px">' + escHtml(tool.skillId ? tool.label : "Skill level") + "</div>";
     html += '<div class="rowline">' + MARK_LEVELS.map(function(level) {
@@ -667,7 +715,7 @@ function renderMarkDock() {
   html += '<textarea id="marks-unit-note" rows="2" placeholder="Anything else for this unit">' + escHtml(slot.note || "") + "</textarea>";
   dock.innerHTML = html;
   dock.setAttribute("data-sid", markFocus);
-  dock.setAttribute("data-kind", markKind);
+  dock.setAttribute("data-kind", dockKind);
   dock.classList.remove("hidden");
 }
 function renderMarkPads() {
@@ -820,7 +868,7 @@ function tapStudent(sid) {
   markFocus = sid;
   var tool = currentTool();
   if (!requireUnit()) { renderMarkPads(); return; }
-  if (tool.mode !== "toggle") {
+  if (markOrder === "student" || tool.mode !== "toggle") {
     renderMarkPads();
     var dock = document.getElementById("marks-dock");
     if (dock && dock.scrollIntoView) dock.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -928,12 +976,14 @@ function removeSkill(id) {
   renderMarkChrome();
   renderMarkPads();
 }
-function setSkillLevel(level) {
+function setSkillLevel(level, skillId) {
   if (!markFocus || !requireUnit()) return;
   var unit = selectedUnit();
   var student = markStudent(markFocus);
-  var tool = currentTool();
-  var skillId = tool && tool.skillId ? tool.skillId : "";
+  if (skillId == null) {
+    var tool = currentTool();
+    skillId = tool && tool.skillId ? tool.skillId : "";
+  }
   enqueueStudentMark(student, function(vs) {
     var slot = unitSlot(vs, unit.id, true);
     if (skillId) {
@@ -958,6 +1008,21 @@ function setBehaviorCode(code) {
       delete day.behavior;
       delete day.behaviorNote;
     }
+    pruneSlot(slot);
+  });
+}
+function toggleFocusedTool(toolId) {
+  if (!markFocus || !requireUnit()) return;
+  var tool = null;
+  markTools().forEach(function(item) { if (item.id === toolId) tool = item; });
+  if (!tool || tool.mode !== "toggle") return;
+  var unit = selectedUnit();
+  var student = markStudent(markFocus);
+  var dayKey = markToday();
+  enqueueStudentMark(student, function(vs) {
+    var slot = unitSlot(vs, unit.id, true);
+    var day = daySlot(slot, dayKey, true);
+    assignFlag(day, tool, !flagOn(day, tool));
     pruneSlot(slot);
   });
 }
@@ -1037,10 +1102,19 @@ function onMarksClick(e) {
     renderMarkPads();
   }
   else if (act === "kind") { markKind = el.getAttribute("data-kind"); rememberSession(); renderMarkChrome(); renderMarkPads(); }
+  else if (act === "order") {
+    markOrder = el.getAttribute("data-order") === "student" ? "student" : "mark";
+    rememberSession();
+    renderMarkChrome();
+    renderMarkPads();
+  }
   else if (act === "jump") jumpMarkLetter(el.getAttribute("data-letter"));
   else if (act === "tap") tapStudent(el.getAttribute("data-id"));
-  else if (act === "level") setSkillLevel(el.getAttribute("data-level"));
+  else if (act === "level") setSkillLevel(el.getAttribute("data-level"), el.hasAttribute("data-skill") ? el.getAttribute("data-skill") : null);
+  else if (act === "clear-skill") setSkillLevel("", el.hasAttribute("data-skill") ? el.getAttribute("data-skill") : null);
   else if (act === "behavior") setBehaviorCode(el.getAttribute("data-code"));
+  else if (act === "clear-behavior") setBehaviorCode("");
+  else if (act === "flag") toggleFocusedTool(el.getAttribute("data-kind"));
   else if (act === "clear") clearCurrentMark();
   else if (act === "unfocus") { markFocus = ""; renderMarkPads(); }
 }
