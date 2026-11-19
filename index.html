@@ -481,6 +481,99 @@ th.sort-th:hover{color:var(--gold)}
   body.sticker-print .st-label{border:none;border-radius:0}
   @page{size:letter portrait;margin:0}
 }
+
+/* ── Period mark board ─────────────────────────────────────── */
+.mark-intro{font-size:15px;color:var(--text-dark);max-width:640px;margin-bottom:14px;line-height:1.45}
+.mark-intro strong{font-weight:700}
+.mark-period-grid,.mark-grid{display:grid;gap:12px}
+.mark-period-grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));margin-top:4px}
+.mark-grid{grid-template-columns:repeat(auto-fill,minmax(148px,1fr));align-items:stretch}
+button.mark-period{
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:4px;
+  min-height:128px;padding:16px;border-radius:18px;text-align:left;width:100%;
+  background:#fff;color:var(--text-dark);border:1px solid rgba(30,35,64,.1);
+  box-shadow:0 8px 22px rgba(30,35,64,.08)
+}
+button.mark-period:hover{background:var(--card);color:var(--text-light);border-color:var(--card);transform:translateY(-2px)}
+button.mark-period .kicker{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold3);font-weight:700}
+button.mark-period:hover .kicker{color:var(--gold2)}
+button.mark-period .big{font-family:'Playfair Display',Georgia,serif;font-size:30px;line-height:1;font-weight:700}
+button.mark-period .sub{font-size:13px;color:var(--text-dark2)}
+button.mark-period:hover .sub{color:rgba(240,237,232,.7)}
+.mark-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.mark-toolbar input{width:auto;min-width:0;flex:1 1 160px}
+.mark-toolbar button,.mark-letter,.mark-tool,.mark-unit-btn{width:auto}
+.mark-legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12px;color:var(--text-dark2);margin-bottom:10px}
+.mark-legend i{display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:6px;vertical-align:-2px}
+.mark-legend i.boy{background:linear-gradient(165deg,#4C94E8,#174A8B)}
+.mark-legend i.girl{background:linear-gradient(165deg,#F8E3A4,#C9A84C)}
+.mark-chiprow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+button.mark-tool,button.mark-unit-btn,button.mark-letter{
+  border-radius:999px;padding:7px 12px;background:#fff;color:var(--text-dark);
+  border:1px solid rgba(30,35,64,.14);box-shadow:none
+}
+button.mark-tool:hover,button.mark-unit-btn:hover,button.mark-letter:hover{
+  background:var(--card);color:var(--text-light);transform:none
+}
+button.mark-tool.on,button.mark-unit-btn.on{
+  background:var(--card);color:var(--gold2);border-color:var(--card);font-weight:700
+}
+button.mark-letter{min-width:34px;padding:6px 0;font-weight:700;color:var(--gold3)}
+.mark-alpha{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 12px}
+.mark-hint{font-size:13px;color:var(--text-dark2);margin-bottom:4px}
+.mark-summary{font-size:12px;color:var(--text-dark2);margin-bottom:8px}
+button.mark-pad{
+  width:100%;aspect-ratio:1;min-height:132px;border:none;border-radius:18px;padding:12px;
+  display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;
+  box-shadow:0 8px 18px rgba(30,35,64,.16);position:relative;overflow:hidden
+}
+button.mark-pad .fn{
+  font-family:'Playfair Display',Georgia,serif;font-size:26px;font-weight:700;line-height:1.05;
+  max-height:2.15em;overflow:hidden;width:100%
+}
+button.mark-pad .nick,button.mark-pad .ln,button.mark-pad .gn{font-size:12px;opacity:.85;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button.mark-pad .ln{margin-top:2px;font-weight:600}
+button.mark-pad .mark-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto;padding-top:8px}
+button.mark-pad .mark-chip{font-size:10px;font-weight:700;letter-spacing:.03em;border-radius:999px;padding:2px 6px;background:rgba(255,255,255,.2)}
+button.mark-pad .counts{font-size:11px;font-weight:700;margin-top:4px;letter-spacing:.04em}
+button.mark-pad.boy,button.mark-pad.boy:hover{
+  background:linear-gradient(165deg,#4C94E8 0%,#1D5EAE 52%,#174A8B 100%);color:#F7FBFF;border-color:transparent
+}
+button.mark-pad.girl,button.mark-pad.girl:hover{
+  background:linear-gradient(165deg,#F8E3A4 0%,#E2C06A 46%,#C9A84C 100%);color:#1A1E38;border-color:transparent
+}
+button.mark-pad.girl .mark-chip{background:rgba(26,30,56,.14);color:#1A1E38}
+button.mark-pad.other,button.mark-pad.other:hover{
+  background:linear-gradient(165deg,#5C657E 0%,#3E465C 100%);color:#F4F1EC;border-color:transparent
+}
+button.mark-pad:hover{transform:translateY(-2px);filter:brightness(1.04)}
+button.mark-pad:active{transform:scale(.98)}
+button.mark-pad.hit{box-shadow:0 0 0 3px #fff,0 10px 22px rgba(30,35,64,.22)}
+button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22)}
+.mark-dock{
+  position:sticky;bottom:8px;margin-top:14px;background:#fff;color:var(--text-dark);
+  border:1px solid rgba(30,35,64,.12);border-radius:16px;padding:14px;
+  box-shadow:0 12px 32px rgba(30,35,64,.16);z-index:5
+}
+.mark-dock h3{font-family:'Playfair Display',Georgia,serif;font-size:26px;line-height:1.1}
+.mark-dock .rowline{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.mark-dock button{width:auto}
+.mark-dock button.on{background:var(--card);color:var(--gold2);border-color:var(--card);font-weight:700}
+.mark-dock textarea{
+  width:100%;margin-top:8px;border-radius:10px;border:1px solid rgba(30,35,64,.15);
+  padding:8px 10px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text-dark);background:#fff
+}
+.roster-launch{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.card button.roster-period{
+  width:auto;min-width:108px;border-radius:12px;padding:8px 12px;text-align:left;
+  background:rgba(255,255,255,.08);color:var(--text-light);border:1px solid rgba(201,168,76,.35)
+}
+.card button.roster-period:hover{background:rgba(201,168,76,.2);color:var(--gold2);border-color:rgba(201,168,76,.5)}
+.card button.roster-period span{display:block;font-size:11px;opacity:.75;font-weight:500}
+@media (max-width:640px){
+  button.mark-pad .fn{font-size:22px}
+  .mark-grid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+}
 </style>
 </head>
 <body>
@@ -550,6 +643,7 @@ th.sort-th:hover{color:var(--gold)}
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem">
         <div class="tabs">
           <button class="tab on" id="tab-roster"   onclick="goTab('roster')">Roster</button>
+          <button class="tab"    id="tab-marks"    onclick="goTab('marks')">Marks</button>
           <button class="tab"    id="tab-quickedit" onclick="goTab('quickedit')">Record</button>
           <button class="tab teacher-only"    id="tab-upload"   onclick="goTab('upload')">CSV Upload</button>
           <button class="tab teacher-only"    id="tab-add"      onclick="goTab('add')">Add Student</button>
@@ -578,11 +672,48 @@ th.sort-th:hover{color:var(--gold)}
           <span style="font-size:12px;color:var(--text3)">Click a name to edit profile, nickname, gender, and scores</span>
           <button class="teacher-only" onclick="resetPeriodCodes(event)" style="margin-left:auto;font-size:12px;padding:5px 12px;color:var(--gold);background:var(--gold-glow);border-color:rgba(201,168,76,.3)">↻ Reset Period Codes</button>
         </div>
+        <div id="roster-launch"></div>
         <div style="overflow-x:auto">
           <table>
             <thead><tr><th>Student</th><th>Grade</th><th>Period</th><th>Code <span style="font-weight:400;color:var(--text3)">↻ reset</span></th><th>Skills</th><th>Delete</th></tr></thead>
             <tbody id="roster-body"><tr><td colspan="6" style="text-align:center;padding:2rem"><div class="spinner"></div></td></tr></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- MARKS — period roster as a pad board -->
+      <div id="pane-marks" class="hidden">
+        <div id="marks-periods">
+          <div class="mark-intro">Tap a period. Names open as large tiles, A–Z by first name. <strong>Boys are blue. Girls are gold.</strong> Then pick a unit and mark skill level, loaner clothes, tardies, and behavior.</div>
+          <div id="marks-period-grid" class="mark-period-grid"></div>
+        </div>
+        <div id="marks-board" class="hidden">
+          <div class="mark-toolbar">
+            <button type="button" data-act="back">← Periods</button>
+            <div id="marks-period-label" style="font-family:'Playfair Display',Georgia,serif;font-size:28px;line-height:1"></div>
+            <input id="marks-date" type="date" aria-label="Mark date"/>
+            <button type="button" data-act="today">Today</button>
+            <input id="marks-search" placeholder="Find a student…" aria-label="Find a student"/>
+          </div>
+          <div class="mark-legend"><span><i class="boy"></i>Boys</span><span><i class="girl"></i>Girls</span><span>Sorted A–Z by first name</span></div>
+          <div class="mark-toolbar">
+            <div id="marks-units" class="mark-chiprow"></div>
+            <input id="marks-unit-name" placeholder="New unit, e.g. Basketball" aria-label="Unit name"/>
+            <button type="button" data-act="add-unit">Add unit</button>
+            <button type="button" data-act="rename-unit">Rename</button>
+            <button type="button" data-act="delete-unit">Delete unit</button>
+          </div>
+          <div class="mark-toolbar">
+            <div id="marks-kinds" class="mark-chiprow"></div>
+            <input id="marks-kind-name" placeholder="Add a mark, e.g. Participation" aria-label="New mark name"/>
+            <button type="button" data-act="add-kind">Add mark</button>
+          </div>
+          <div id="marks-hint" class="mark-hint"></div>
+          <div id="marks-summary" class="mark-summary"></div>
+          <div id="marks-alert"></div>
+          <div id="marks-alpha" class="mark-alpha"></div>
+          <div id="marks-grid" class="mark-grid"></div>
+          <div id="marks-dock" class="mark-dock hidden"></div>
         </div>
       </div>
 
@@ -1302,6 +1433,7 @@ function saveStudentProfile() {
     renderLB();
     if (typeof renderQuickEdit === "function") renderQuickEdit();
     if (typeof renderPortalList === "function") renderPortalList();
+    if (typeof renderMarkPads === "function") renderMarkPads();
   }
   sb.from("students").update(payload).eq("id", id).then(function(r) {
     if (r.error && /nickname/i.test(r.error.message || "")) {
@@ -2075,6 +2207,7 @@ function loadData() {
     renderPortalList();
     renderSkillsList();
     renderQuickEdit();
+    if (typeof refreshMarkBook === "function") refreshMarkBook();
   });
 }
 
@@ -2150,6 +2283,7 @@ function renderRoster() {
   var all = allStudents();
   var list = period === "all" ? all : all.filter(function(s) { return String(s.period) === String(period); });
   setHTML("roster-count", list.length + " students");
+  if (typeof renderRosterLaunch === "function") renderRosterLaunch();
   if (!list.length) {
     setHTML("roster-body", '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:2rem">No students yet — use CSV Upload or Add Student.</td></tr>');
     return;
@@ -2575,7 +2709,7 @@ function renderStudentGoals() {
   }).join(""));
 
   // Goal progress summary
-  var hasGoals = Object.keys(goals).length > 0;
+  var hasGoals = skills.some(function(sk) { return goals[sk.id] != null && goals[sk.id] !== ""; });
   setHTML("student-goals-progress", hasGoals ? skills.map(function(sk) {
     var goal = goals[sk.id];
     if (!goal) return "";
@@ -2588,8 +2722,22 @@ function renderStudentGoals() {
   }).filter(Boolean).join("") : '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">Set your goals above and track your progress here.</div>');
 }
 
+// Class marks live on goals.__vs. Keep that object when a skill goal is saved.
+function mergeGoalSave(student, skillGoals) {
+  return sb.from("students").select("goals").eq("id", student.id).then(function(r) {
+    var fresh = (r.data && r.data[0] && r.data[0].goals) || {};
+    if (typeof fresh === "string") { try { fresh = JSON.parse(fresh); } catch (e) { fresh = {}; } }
+    if (!fresh || typeof fresh !== "object") fresh = {};
+    if (fresh.__vs) skillGoals.__vs = fresh.__vs;
+    else if (student.goals && student.goals.__vs) skillGoals.__vs = student.goals.__vs;
+    student.goals = skillGoals;
+    studentGoals[student.id] = skillGoals;
+    return sb.from("students").update({ goals: skillGoals }).eq("id", student.id);
+  });
+}
 function saveStudentGoals() {
   var s = portalStudent;
+  if (!s) return;
   var goals = {};
   skills.forEach(function(sk) {
     var el = document.getElementById("sg-" + sk.id);
@@ -2598,10 +2746,7 @@ function saveStudentGoals() {
       if (gp.ok) goals[sk.id] = gp.value;
     }
   });
-  studentGoals[s.id] = goals;
-
-  // Save goals to Supabase student record (store as JSON in a goals column)
-  sb.from("students").update({goals: goals}).eq("id", s.id).then(function(r) {
+  mergeGoalSave(s, goals).then(function() {
     var ok = document.getElementById("goals-ok");
     if (ok) { ok.classList.remove("hidden"); setTimeout(function(){ok.classList.add("hidden");}, 3000); }
     renderStudentGoals();
@@ -3324,8 +3469,7 @@ function saveGoals() {
     var gp = parseTimeInput(el.value, sk);
     if (gp.ok) goals[sk.id] = gp.value;
   });
-  studentGoals[s.id] = goals;
-  sb.from("students").update({ goals: goals }).eq("id", s.id).then(function() { openSP(s.id); });
+  mergeGoalSave(s, goals).then(function() { openSP(s.id); });
 }
 
 function applyLocalEntryUpdate(studentId, skid, entryId, newValue) {
@@ -4227,7 +4371,7 @@ function goView(v) {
 }
 function goTab(t) {
   if (isTA && ["upload","add","skills","share","assistants"].indexOf(t) >= 0) t = "quickedit";
-  ["roster","quickedit","upload","add","scores","progress","averages","skills","share","assistants"].forEach(function(id) {
+  ["roster","marks","quickedit","upload","add","scores","progress","averages","skills","share","assistants"].forEach(function(id) {
     var pane = document.getElementById("pane-" + id);
     var tab  = document.getElementById("tab-" + id);
     if (pane) pane.classList.toggle("hidden", id !== t);
@@ -4240,6 +4384,7 @@ function goTab(t) {
   if (t === "scores")   initGridFilters();
   if (t === "quickedit") renderQuickEdit();
   if (t === "assistants") loadTAList();
+  if (t === "marks" && typeof renderMarks === "function") renderMarks();
 }
 function setQeSort(v) {
   var el = document.getElementById("qe-sort");
@@ -4561,5 +4706,6 @@ function goAdminTab(t) {
   });
 }
 </script>
+<script src="marks.js?v=1"></script>
 </body>
 </html>
