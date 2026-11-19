@@ -335,6 +335,21 @@ tr:hover td{background:rgba(255,255,255,0.03)}
   padding:9px 13px;font-size:12px;
   color:var(--gold2);margin-bottom:12px;
 }
+#teams-names{
+  font-family:'DM Sans',sans-serif;font-size:14px;width:100%;
+  padding:10px 12px;border-radius:var(--radius-sm);resize:vertical;
+  color:var(--text-light);background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.15);
+}
+#teams-names:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-glow);outline:none}
+#pane-teams .team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+#pane-teams .team-section{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--text-dark);margin:14px 0 8px}
+#pane-teams .team-card h3{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--gold2);font-weight:700;margin-bottom:2px}
+#pane-teams .team-meta{font-size:12px;color:var(--text-muted);margin-bottom:8px;line-height:1.4}
+#pane-teams .team-person{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,0.08);font-size:13px}
+#pane-teams .team-person span:first-child{min-width:0}
+#pane-teams .team-person span:last-child{color:var(--text-muted);white-space:nowrap}
+#pane-teams select:disabled,#pane-teams input:disabled{opacity:.45}
 
 /* ── Login inputs — force dark text ────────────────────────── */
 #login-email,
@@ -650,6 +665,7 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
           <button class="tab"    id="tab-scores"   onclick="goTab('scores')">⬆ Upload Scores</button>
           <button class="tab"    id="tab-progress" onclick="goTab('progress')">Progress</button>
           <button class="tab"    id="tab-averages" onclick="goTab('averages')">Averages</button>
+          <button class="tab"    id="tab-teams"    onclick="goTab('teams')">Teams</button>
           <button class="tab teacher-only"    id="tab-skills"   onclick="goTab('skills')">Skills</button>
           <button class="tab teacher-only"    id="tab-share"    onclick="goTab('share')">Share</button>
           <button class="tab teacher-only"    id="tab-assistants" onclick="goTab('assistants')">Assistants</button>
@@ -905,6 +921,72 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
             </table>
           </div>
         </div>
+      </div>
+
+      <!-- TEAMS -->
+      <div id="pane-teams" class="hidden">
+        <div class="card" style="margin-bottom:12px">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:8px">Make Teams</div>
+          <div class="info">Split by a number of teams or by team size. Sport marks are the 1–4 ratings on Marks (1 Beginning through 4 Advanced). A student with no sport rating counts as 2.5. Fitness scores are the Skills tab, scaled 1–10 for this class, and a blank score counts as 5.5. Group similar marks for ability teams, or balance marks so every team has a close average. Same-gender teams keep each gender together. Balance genders so each team has a similar count.</div>
+          <div id="teams-alert"></div>
+          <div class="grid2">
+            <div>
+              <label class="lbl">Class</label>
+              <select id="teams-period" onchange="previewTeams()"></select>
+            </div>
+            <div>
+              <label class="lbl">Split by</label>
+              <select id="teams-split" onchange="previewTeams()">
+                <option value="teams">Number of teams</option>
+                <option value="size">Students per team</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl" id="teams-count-lbl">How many teams</label>
+              <input id="teams-count" type="number" min="2" step="1" value="4" oninput="previewTeams()"/>
+            </div>
+            <div>
+              <label class="lbl">Marks</label>
+              <select id="teams-skill-mode" onchange="previewTeams()">
+                <option value="off">Don't use marks</option>
+                <option value="group">Group similar marks together</option>
+                <option value="balance">Balance marks on every team</option>
+              </select>
+            </div>
+            <div class="full">
+              <label class="lbl">Which skill</label>
+              <select id="teams-skill" onchange="previewTeams()">
+                <option value="sport:*:*">All sport skills</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl" id="teams-which-lbl">Which fitness score</label>
+              <select id="teams-which" onchange="previewTeams()">
+                <option value="best">Best score</option>
+                <option value="latest">Latest score</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Gender</label>
+              <select id="teams-gender" onchange="previewTeams()">
+                <option value="off">Don't use gender</option>
+                <option value="group">Same-gender teams</option>
+                <option value="balance">Balance genders on every team</option>
+              </select>
+            </div>
+            <div class="full">
+              <label class="lbl">Team names (optional)</label>
+              <textarea id="teams-names" rows="2" placeholder="One per line, or leave blank for Ravens, Wolves, Bears…" oninput="previewTeams()"></textarea>
+            </div>
+          </div>
+          <div id="teams-plan" style="font-size:13px;color:var(--text2);margin:12px 0;line-height:1.45"></div>
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <button type="button" class="gold" id="teams-go" onclick="makeTeams()">Make teams</button>
+            <button type="button" id="teams-copy" onclick="copyTeams()" disabled>Copy</button>
+            <button type="button" id="teams-print" onclick="printTeams()" disabled>Print</button>
+          </div>
+        </div>
+        <div id="teams-result"></div>
       </div>
 
       <!-- SKILLS -->
@@ -1296,6 +1378,7 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="team-draw.js?v=20261119"></script>
 <script>
 var ADMIN_EMAIL = "chuynh@lasdschools.org";
 
@@ -2283,6 +2366,7 @@ function syncFilters() {
     el.innerHTML = skills.map(function(sk) { return '<option value="' + sk.id + '">' + sk.name + '</option>'; }).join("");
     if (cur && skills.find(function(s) { return s.id === cur; })) el.value = cur;
   });
+  refreshTeamsControls();
 }
 
 // ── ROSTER ───────────────────────────────────────────────────
@@ -4364,6 +4448,449 @@ async function absorbSelected() {
   }
 }
 
+// ── TEAMS ────────────────────────────────────────────────────
+var lastTeamText = "";
+var lastTeamPrint = "";
+function teamsEsc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function teamsParseSkill(key) {
+  var parts = String(key || "sport:*:*").split(":");
+  if (parts[0] === "fit") return { source: "fit", unitId: "*", skillId: parts.slice(1).join(":") || "*" };
+  return { source: "sport", unitId: parts[1] || "*", skillId: parts.slice(2).join(":") || "*" };
+}
+function teamsSettings() {
+  var raw = String((document.getElementById("teams-count") || {}).value || "").trim();
+  var count = Number(raw);
+  if (raw === "" || !isFinite(count) || Math.floor(count) !== count) count = NaN;
+  var choice = teamsParseSkill((document.getElementById("teams-skill") || {}).value);
+  return {
+    split: (document.getElementById("teams-split") || {}).value === "size" ? "size" : "teams",
+    count: count,
+    skillMode: (document.getElementById("teams-skill-mode") || {}).value || "off",
+    genderMode: (document.getElementById("teams-gender") || {}).value || "off",
+    source: choice.source,
+    unitId: choice.unitId,
+    skillId: choice.skillId,
+    which: (document.getElementById("teams-which") || {}).value === "latest" ? "latest" : "best",
+    blank: choice.source === "sport" ? 2.5 : 5.5
+  };
+}
+function syncTeamsFields() {
+  var split = document.getElementById("teams-split");
+  var lbl = document.getElementById("teams-count-lbl");
+  if (split && lbl) lbl.textContent = split.value === "size" ? "Students per team" : "How many teams";
+  var off = ((document.getElementById("teams-skill-mode") || {}).value || "off") === "off";
+  var skill = document.getElementById("teams-skill");
+  var which = document.getElementById("teams-which");
+  var fit = skill && String(skill.value || "").indexOf("fit:") === 0;
+  if (skill) skill.disabled = off;
+  if (which) which.disabled = off || !fit;
+}
+function teamsPeriodBlocks() {
+  var choice = (document.getElementById("teams-period") || {}).value || "all";
+  var all = allStudents();
+  function byPeriod(list) {
+    return list.slice().sort(function(a, b) {
+      var na = parseInt(a, 10), nb = parseInt(b, 10);
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return String(a).localeCompare(String(b), undefined, { numeric: true });
+    });
+  }
+  if (choice === "each") {
+    var seen = {};
+    var periods = [];
+    all.forEach(function(s) {
+      var p = String(s.period == null ? "" : s.period);
+      if (!seen[p]) { seen[p] = true; periods.push(p); }
+    });
+    return byPeriod(periods).map(function(p) {
+      return { period: p, students: all.filter(function(s) { return String(s.period) === p; }) };
+    });
+  }
+  if (choice === "all") return [{ period: "", students: all }];
+  return [{ period: choice, students: all.filter(function(s) { return String(s.period) === String(choice); }) }];
+}
+function teamsMark(student, sk, which) {
+  var vals = getVals(student.id, sk.id);
+  if (!vals.length) return null;
+  if (which === "latest") return Number(vals[vals.length - 1]);
+  return sk.lower_better ? Math.min.apply(null, vals) : Math.max.apply(null, vals);
+}
+function teamsPlainScore(value, sk) {
+  if (value == null || value === "") return "";
+  var code = normalizeCode(value);
+  if (code === "-") return "—";
+  if (code) return codeLabel(code);
+  var text = formatTimeValue(value, sk);
+  if (sk && sk.unit && !isTimeSkill(sk)) text += " " + sk.unit;
+  return text;
+}
+function teamsCatalog() {
+  if (typeof currentCatalog !== "function") return { units: [] };
+  try { return currentCatalog() || { units: [] }; } catch (e) { return { units: [] }; }
+}
+function teamsLevel(raw) {
+  var n = Number(raw);
+  if (!isFinite(n) || n < 1 || n > 4) return null;
+  return n;
+}
+function teamsLevelLabel(n) {
+  var id = String(n);
+  var levels = (typeof MARK_LEVELS !== "undefined" && MARK_LEVELS) ? MARK_LEVELS : [
+    { id: "1", name: "Beginning" }, { id: "2", name: "Developing" },
+    { id: "3", name: "Proficient" }, { id: "4", name: "Advanced" }
+  ];
+  for (var i = 0; i < levels.length; i++) if (String(levels[i].id) === id) return levels[i].id + " " + levels[i].name;
+  return id;
+}
+function teamsRatings(student, unitId, skillId) {
+  if (typeof readVs !== "function") return [];
+  var marks = (readVs(student).marks) || {};
+  var units = teamsCatalog().units || [];
+  if (unitId && unitId !== "*") units = units.filter(function(u) { return u.id === unitId; });
+  var nums = [];
+  units.forEach(function(unit) {
+    var slot = marks[unit.id];
+    if (!slot) return;
+    if (skillId && skillId !== "*") {
+      var one = teamsLevel(slot.skills && slot.skills[skillId]);
+      if (one != null) nums.push(one);
+      return;
+    }
+    var list = unit.skills || [];
+    if (list.length) {
+      list.forEach(function(sk) {
+        var n = teamsLevel(slot.skills && slot.skills[sk.id]);
+        if (n != null) nums.push(n);
+      });
+    } else {
+      var legacy = teamsLevel(slot.skill);
+      if (legacy != null) nums.push(legacy);
+    }
+  });
+  return nums;
+}
+function teamsAverage(nums) {
+  if (!nums.length) return null;
+  var sum = 0;
+  nums.forEach(function(n) { sum += n; });
+  return Math.round((sum / nums.length) * 10) / 10;
+}
+function teamsPlayers(list, settings) {
+  var bases = (list || []).map(function(s) {
+    var g = genderKey(s.gender);
+    return {
+      id: s.id,
+      name: studentName(s),
+      gender: g === "unknown" ? "U" : g,
+      genderText: genderShort(s.gender),
+      period: String(s.period == null ? "" : s.period),
+      strength: null,
+      detail: "",
+      raw: null,
+      _student: s
+    };
+  });
+  if (!settings || settings.skillMode === "off" || typeof VikingTeams === "undefined") {
+    bases.forEach(function(p) { delete p._student; });
+    return bases;
+  }
+  if (settings.source !== "fit") {
+    bases.forEach(function(p) {
+      var nums = teamsRatings(p._student, settings.unitId, settings.skillId);
+      p.strength = teamsAverage(nums);
+      if (!nums.length) p.detail = "no mark";
+      else if (nums.length === 1 && settings.skillId && settings.skillId !== "*") p.detail = teamsLevelLabel(nums[0]);
+      else p.detail = p.strength.toFixed(1);
+      delete p._student;
+    });
+    return bases;
+  }
+  var selected = settings.skillId && settings.skillId !== "*"
+    ? skills.filter(function(sk) { return sk.id === settings.skillId; })
+    : skills.slice();
+  if (!selected.length) {
+    bases.forEach(function(p) { delete p._student; p.detail = "no mark"; });
+    return bases;
+  }
+  var which = settings.which === "latest" ? "latest" : "best";
+  var stats = selected.map(function(sk) {
+    var vals = [];
+    bases.forEach(function(p) {
+      var raw = teamsMark(p._student, sk, which);
+      if (raw != null && isNumericScore(raw)) vals.push(Number(raw));
+    });
+    return { sk: sk, min: vals.length ? Math.min.apply(null, vals) : null, max: vals.length ? Math.max.apply(null, vals) : null };
+  });
+  bases.forEach(function(p) {
+    var parts = [];
+    var rawSingle = null;
+    stats.forEach(function(st) {
+      var raw = teamsMark(p._student, st.sk, which);
+      if (selected.length === 1) rawSingle = raw;
+      var asset = VikingTeams.scaleAsset(raw, st.min, st.max, !!st.sk.lower_better);
+      if (asset != null) parts.push(asset);
+    });
+    p.strength = VikingTeams.overallAsset(parts);
+    p.raw = rawSingle != null && isNumericScore(rawSingle) ? Number(rawSingle) : null;
+    if (selected.length === 1) {
+      p.detail = rawSingle == null ? "no mark" : teamsPlainScore(rawSingle, selected[0]);
+      if (p.strength != null) p.detail += " · " + p.strength.toFixed(1);
+    } else p.detail = p.strength == null ? "no mark" : ("asset " + p.strength.toFixed(1));
+    delete p._student;
+  });
+  return bases;
+}
+function teamsGenderTitle(key) {
+  if (!key) return "";
+  if (key === "U") return "Unspecified";
+  return genderLabel(key);
+}
+function teamsPlanSentence(plan) {
+  if (!plan) return "";
+  if (plan.text) return plan.text;
+  if (!plan.sections) return "";
+  return plan.sections.map(function(s) {
+    var teams = s.teamCount === 1 ? "1 team" : s.teamCount + " teams";
+    var size = s.min === s.max ? String(s.max) : (s.max + " or " + s.min);
+    return teamsGenderTitle(s.title) + ": " + teams + " of " + size;
+  }).join(" · ") + ".";
+}
+function teamsSkillOptions() {
+  var html = ['<optgroup label="Sport marks">', '<option value="sport:*:*">All sport skills</option>'];
+  (teamsCatalog().units || []).forEach(function(unit) {
+    html.push('<option value="sport:' + teamsEsc(unit.id) + ':*">' + teamsEsc(unit.name) + " — all skills</option>");
+    (unit.skills || []).forEach(function(sk) {
+      html.push('<option value="sport:' + teamsEsc(unit.id) + ":" + teamsEsc(sk.id) + '">' + teamsEsc(unit.name) + " — " + teamsEsc(sk.name) + "</option>");
+    });
+  });
+  html.push('</optgroup><optgroup label="Fitness scores"><option value="fit:*">All fitness skills</option>');
+  skills.forEach(function(sk) {
+    html.push('<option value="fit:' + teamsEsc(sk.id) + '">' + teamsEsc(sk.name) + "</option>");
+  });
+  html.push("</optgroup>");
+  return html.join("");
+}
+function refreshTeamsControls() {
+  var periodEl = document.getElementById("teams-period");
+  var skillEl = document.getElementById("teams-skill");
+  if (!periodEl || !skillEl) return;
+  var curP = periodEl.value || "all";
+  var seen = {};
+  var periods = [];
+  allStudents().forEach(function(s) {
+    if (!seen[s.period]) { seen[s.period] = true; periods.push(s.period); }
+  });
+  periods.sort(function(a, b) {
+    var na = parseInt(a, 10), nb = parseInt(b, 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return String(a).localeCompare(String(b), undefined, { numeric: true });
+  });
+  periodEl.innerHTML = '<option value="all">All students together</option><option value="each">Each period separately</option>' +
+    periods.map(function(p) { return '<option value="' + teamsEsc(p) + '">Period ' + teamsEsc(p) + "</option>"; }).join("");
+  if (curP === "all" || curP === "each" || periods.map(String).indexOf(String(curP)) >= 0) periodEl.value = curP;
+  else periodEl.value = "all";
+  var curS = skillEl.value || "sport:*:*";
+  skillEl.innerHTML = teamsSkillOptions();
+  var allowed = false;
+  Array.prototype.forEach.call(skillEl.options || [], function(opt) { if (opt.value === curS) allowed = true; });
+  skillEl.value = allowed ? curS : "sport:*:*";
+  previewTeams();
+}
+function previewTeams() {
+  syncTeamsFields();
+  var el = document.getElementById("teams-plan");
+  if (!el || typeof VikingTeams === "undefined") return;
+  var settings = teamsSettings();
+  var choice = (document.getElementById("teams-period") || {}).value || "all";
+  var blocks = teamsPeriodBlocks();
+  if (!blocks.length) { el.textContent = "Add students to the roster first."; return; }
+  var lines = [];
+  var allPlayers = [];
+  blocks.forEach(function(block) {
+    var players = teamsPlayers(block.students, settings);
+    allPlayers = allPlayers.concat(players);
+    var plan = VikingTeams.planTeams(players, settings);
+    var prefix = choice === "all" ? "" : ("Period " + (block.period || "—") + ": ");
+    lines.push(prefix + (plan.ok ? teamsPlanSentence(plan) : plan.error));
+  });
+  var notes = VikingTeams.optionNotes(settings, allPlayers);
+  el.textContent = lines.join(" ") + (notes.length ? " " + notes.join(" ") : "");
+}
+function teamsCustomNames() {
+  return String((document.getElementById("teams-names") || {}).value || "")
+    .split(/[\n,]/).map(function(s) { return s.trim(); }).filter(Boolean);
+}
+function teamsNameAt(index, custom) {
+  if (custom.length) return custom[index] || ("Team " + (index + 1));
+  return (VikingTeams.NAMES && VikingTeams.NAMES[index]) || ("Team " + (index + 1));
+}
+function teamsGenderLine(players) {
+  var rank = { M: 0, F: 1, "—": 9 };
+  var counts = {};
+  players.forEach(function(p) {
+    var label = p.genderText || "—";
+    counts[label] = (counts[label] || 0) + 1;
+  });
+  return Object.keys(counts).sort(function(a, b) {
+    var ra = Object.prototype.hasOwnProperty.call(rank, a) ? rank[a] : 2;
+    var rb = Object.prototype.hasOwnProperty.call(rank, b) ? rank[b] : 2;
+    if (ra !== rb) return ra - rb;
+    return a.localeCompare(b);
+  }).map(function(label) { return counts[label] + " " + label; }).join(" · ");
+}
+function teamsAverageMark(players, sk) {
+  var nums = [];
+  players.forEach(function(p) {
+    if (p.raw != null && isNumericScore(p.raw)) nums.push(Number(p.raw));
+  });
+  if (!nums.length || !sk) return "";
+  var sum = 0;
+  nums.forEach(function(n) { sum += n; });
+  return teamsPlainScore(sum / nums.length, sk);
+}
+function teamsMeta(players, settings, sk) {
+  var bits = [players.length + (players.length === 1 ? " student" : " students")];
+  var g = teamsGenderLine(players);
+  if (g) bits.push(g);
+  if (settings.skillMode !== "off") {
+    var avg = VikingTeams.assetAverage(players, settings.blank);
+    if (settings.source === "sport") {
+      if (avg != null) bits.push("skill avg " + avg.toFixed(1));
+    } else if (avg != null) {
+      bits.push("asset " + avg.toFixed(1));
+      var mark = sk ? teamsAverageMark(players, sk) : "";
+      if (mark) bits.push("avg " + mark);
+    }
+  }
+  return bits.join(" · ");
+}
+function renderTeamDraw(blocks, settings) {
+  var sk = settings.source === "fit" && settings.skillId && settings.skillId !== "*"
+    ? skills.find(function(s) { return s.id === settings.skillId; })
+    : null;
+  var custom = teamsCustomNames();
+  var html = [];
+  var print = [];
+  var lines = [];
+  blocks.forEach(function(block) {
+    var nameIndex = 0;
+    block.sections.forEach(function(section) {
+      var heading = [];
+      if (block.period !== "" && block.period != null) heading.push("Period " + block.period);
+      var gTitle = teamsGenderTitle(section.title);
+      if (gTitle) heading.push(gTitle);
+      var title = heading.join(" · ");
+      if (title) {
+        html.push('<div class="team-section">' + teamsEsc(title) + "</div>");
+        print.push("<h2>" + teamsEsc(title) + "</h2>");
+        lines.push(title, "");
+      }
+      html.push('<div class="team-grid">');
+      print.push('<div class="wrap">');
+      section.teams.forEach(function(team) {
+        var name = teamsNameAt(nameIndex++, custom);
+        var people = team.slice().sort(function(a, b) {
+          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        });
+        var meta = teamsMeta(people, settings, sk);
+        html.push('<div class="card team-card"><h3>' + teamsEsc(name) + '</h3><div class="team-meta">' + teamsEsc(meta) + "</div>");
+        print.push('<div class="team"><h3>' + teamsEsc(name) + '</h3><div class="meta">' + teamsEsc(meta) + "</div>");
+        lines.push(name, meta);
+        people.forEach(function(p) {
+          var right = p.genderText || "";
+          if (p.detail) right += (right ? " · " : "") + p.detail;
+          html.push('<div class="team-person"><span>' + teamsEsc(p.name) + "</span><span>" + teamsEsc(right) + "</span></div>");
+          print.push('<div class="person"><span>' + teamsEsc(p.name) + "</span><span>" + teamsEsc(right) + "</span></div>");
+          lines.push("- " + p.name + (right ? " (" + right + ")" : ""));
+        });
+        html.push("</div>");
+        print.push("</div>");
+        lines.push("");
+      });
+      html.push("</div>");
+      print.push("</div>");
+    });
+  });
+  setHTML("teams-result", html.join(""));
+  lastTeamText = lines.join("\n").trim();
+  lastTeamPrint = print.join("");
+  var copyBtn = document.getElementById("teams-copy");
+  var printBtn = document.getElementById("teams-print");
+  var go = document.getElementById("teams-go");
+  if (copyBtn) copyBtn.disabled = !lastTeamText;
+  if (printBtn) printBtn.disabled = !lastTeamText;
+  if (go) go.textContent = "Draw again";
+}
+function makeTeams() {
+  if (typeof VikingTeams === "undefined") {
+    alertEl("teams-alert", "Team maker did not load. Refresh the page.");
+    return;
+  }
+  syncTeamsFields();
+  var settings = teamsSettings();
+  var blocks = teamsPeriodBlocks();
+  var drawn = [];
+  var errors = [];
+  var allPlayers = [];
+  blocks.forEach(function(block) {
+    var players = teamsPlayers(block.students, settings);
+    var result = VikingTeams.makeDraw(players, settings);
+    var label = block.period !== "" && block.period != null ? ("Period " + block.period + ": ") : "";
+    if (!result.ok) errors.push(label + result.error);
+    else {
+      drawn.push({ period: block.period, sections: result.sections });
+      allPlayers = allPlayers.concat(players);
+    }
+  });
+  if (!drawn.length) {
+    alertEl("teams-alert", errors.join(" ") || "Add students to the roster first.");
+    return;
+  }
+  alertEl("teams-alert", errors.concat(VikingTeams.optionNotes(settings, allPlayers)).join(" "), errors.length ? "err" : "ok");
+  renderTeamDraw(drawn, settings);
+}
+function copyTeams() {
+  if (!lastTeamText) return;
+  function done() { alertEl("teams-alert", "Copied the teams.", "ok"); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(lastTeamText).then(done).catch(function() { teamsCopyFallback(); });
+    return;
+  }
+  teamsCopyFallback();
+}
+function teamsCopyFallback() {
+  var area = document.createElement("textarea");
+  area.value = lastTeamText;
+  document.body.appendChild(area);
+  area.select();
+  try {
+    document.execCommand("copy");
+    alertEl("teams-alert", "Copied the teams.", "ok");
+  } catch (e) {
+    alertEl("teams-alert", "Could not copy. Select the team list and copy it yourself.");
+  }
+  document.body.removeChild(area);
+}
+function printTeams() {
+  if (!lastTeamPrint) return;
+  var w = window.open("", "viking-teams");
+  if (!w) { alertEl("teams-alert", "Allow pop-up windows to print the teams."); return; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>VikingStrong teams</title><style>'
+    + "body{font-family:Georgia,serif;color:#1a1e38;margin:24px}h1{font-size:22px;margin:0 0 8px}"
+    + "h2{font-size:16px;margin:18px 0 8px}.wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}"
+    + ".team{border:1px solid #ccc;border-radius:10px;padding:12px 14px;width:240px;break-inside:avoid;page-break-inside:avoid}"
+    + "h3{margin:0 0 4px;font-size:18px}.meta{color:#555;font-size:12px;margin-bottom:8px}"
+    + ".person{display:flex;justify-content:space-between;gap:8px;font-family:sans-serif;font-size:13px;padding:4px 0;border-top:1px solid #eee}"
+    + "</style></head><body><h1>VikingStrong teams</h1>" + lastTeamPrint + "</body></html>");
+  w.document.close();
+  w.focus();
+  setTimeout(function() { try { w.print(); } catch (e) {} }, 250);
+}
+
 // ── NAVIGATION ───────────────────────────────────────────────
 function goView(v) {
   if (isTA && v === "student") v = "teacher";
@@ -4379,7 +4906,7 @@ function goView(v) {
 }
 function goTab(t) {
   if (isTA && ["upload","add","skills","share","assistants"].indexOf(t) >= 0) t = "quickedit";
-  ["roster","marks","quickedit","upload","add","scores","progress","averages","skills","share","assistants"].forEach(function(id) {
+  ["roster","marks","quickedit","upload","add","scores","progress","averages","teams","skills","share","assistants"].forEach(function(id) {
     var pane = document.getElementById("pane-" + id);
     var tab  = document.getElementById("tab-" + id);
     if (pane) pane.classList.toggle("hidden", id !== t);
@@ -4387,6 +4914,7 @@ function goTab(t) {
   });
   if (t === "progress") renderProgress();
   if (t === "averages") renderClassAverages();
+  if (t === "teams")    refreshTeamsControls();
   if (t === "skills")   renderSkillsList();
   if (t === "share")    loadSharePanel();
   if (t === "scores")   initGridFilters();
