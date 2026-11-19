@@ -771,7 +771,7 @@ function renderStuGoals() {
   }
   var prog = document.getElementById("stu-goals-progress");
   if (!prog) return;
-  var keys = Object.keys(goals);
+  var keys = Object.keys(goals).filter(function(k) { return k !== "__vs"; });
   if (!keys.length) {
     prog.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">Set your goals above and track them here.</div>';
     return;
@@ -800,14 +800,21 @@ function saveStuGoals() {
   var ok = document.getElementById("stu-goals-ok");
   var btn = document.querySelector("#pane-goals button.primary");
   if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
-  sb.from("students").update({ goals: goals }).eq("id", selectedStudent.id).then(function(r) {
+  var studentId = selectedStudent.id;
+  sb.from("students").select("goals").eq("id", studentId).then(function(prev) {
+    var fresh = (prev.data && prev.data[0] && prev.data[0].goals) || {};
+    if (typeof fresh === "string") { try { fresh = JSON.parse(fresh); } catch (e) { fresh = {}; } }
+    if (fresh && fresh.__vs) goals.__vs = fresh.__vs;
+    else if (selectedStudent.goals && selectedStudent.goals.__vs) goals.__vs = selectedStudent.goals.__vs;
+    return sb.from("students").update({ goals: goals }).eq("id", studentId);
+  }).then(function(r) {
     if (btn) { btn.disabled = false; btn.textContent = "Save Goals"; }
-    if (r.error) {
-      if (ok) { ok.classList.remove("hidden"); ok.className = "alert alert-error"; ok.style.marginTop = "10px"; ok.textContent = r.error.message; }
+    if (!r || r.error) {
+      if (ok) { ok.classList.remove("hidden"); ok.className = "alert alert-error"; ok.style.marginTop = "10px"; ok.textContent = (r && r.error && r.error.message) || "Could not save goals."; }
       return;
     }
     selectedStudent.goals = goals;
-    var i = students.findIndex(function(s) { return s.id === selectedStudent.id; });
+    var i = students.findIndex(function(s) { return s.id === studentId; });
     if (i > -1) students[i].goals = goals;
     if (ok) { ok.classList.remove("hidden"); ok.className = "alert alert-success"; ok.style.marginTop = "10px"; ok.textContent = "✓ Goals saved!"; }
     renderStuGoals();
