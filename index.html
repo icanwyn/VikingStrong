@@ -350,6 +350,23 @@ tr:hover td{background:rgba(255,255,255,0.03)}
 #pane-teams .team-person span:first-child{min-width:0}
 #pane-teams .team-person span:last-child{color:var(--text-muted);white-space:nowrap}
 #pane-teams select:disabled,#pane-teams input:disabled{opacity:.45}
+#pane-teams .bracket-scroll{overflow-x:auto;padding-bottom:6px}
+#pane-teams .bracket-cols{display:flex;gap:14px;align-items:flex-start;min-width:max-content}
+#pane-teams .bracket-col{display:flex;flex-direction:column;gap:10px;min-width:200px}
+#pane-teams .bracket-round-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gold2);margin:2px 0 4px}
+#pane-teams .bracket-match{border:1px solid rgba(255,255,255,0.14);border-radius:10px;overflow:hidden;background:rgba(255,255,255,0.03)}
+#pane-teams button.bracket-slot,
+#pane-teams .bracket-slot{
+  display:flex;justify-content:space-between;gap:8px;align-items:center;width:100%;
+  text-align:left;background:transparent;color:var(--text-light);
+  border:0;border-radius:0;border-top:1px solid rgba(255,255,255,0.08);
+  box-shadow:none;padding:8px 10px;font-size:13px;font-weight:500;transform:none;cursor:pointer;
+}
+#pane-teams .bracket-match>.bracket-slot:first-child{border-top:0}
+#pane-teams button.bracket-slot:hover{background:rgba(201,168,76,0.14);color:var(--text-light);transform:none;box-shadow:none}
+#pane-teams button.bracket-slot:active{transform:none}
+#pane-teams .bracket-slot.win{background:rgba(201,168,76,0.2);color:var(--gold2);font-weight:700}
+#pane-teams .bracket-champ{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--gold2);margin:12px 0 4px}
 
 /* ── Login inputs — force dark text ────────────────────────── */
 #login-email,
@@ -927,7 +944,7 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
       <div id="pane-teams" class="hidden">
         <div class="card" style="margin-bottom:12px">
           <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:8px">Make Teams</div>
-          <div class="info">Split by a number of teams or by team size. Sport marks are the 1–4 ratings on Marks (1 Beginning through 4 Advanced). A student with no sport rating counts as 2.5. Fitness scores are the Skills tab, scaled 1–10 for this class, and a blank score counts as 5.5. Group similar marks for ability teams, or balance marks so every team has a close average. Same-gender teams keep each gender together. Balance genders so each team has a similar count.</div>
+          <div class="info">Split by a number of teams or by team size. Sport marks are the 1–4 ratings on Marks (1 Beginning through 4 Advanced). A student with no sport rating counts as 2.5. Fitness scores are the Skills tab, scaled 1–10 for this class, and a blank score counts as 5.5. Group similar marks for ability teams, or balance marks so every team has a close average. Same-gender teams keep each gender together. Balance genders so each team has a similar count. After the draw, make a single-elimination bracket, a double-elimination bracket, or a round robin.</div>
           <div id="teams-alert"></div>
           <div class="grid2">
             <div>
@@ -987,6 +1004,32 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
           </div>
         </div>
         <div id="teams-result"></div>
+        <div id="teams-bracket-card" class="card hidden" style="margin-top:12px">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:8px">Competition bracket</div>
+          <div class="info" id="bracket-note"></div>
+          <div id="bracket-alert"></div>
+          <div class="grid2">
+            <div>
+              <label class="lbl">Format</label>
+              <select id="bracket-format" onchange="previewBracket()">
+                <option value="single">Single elimination</option>
+                <option value="double">Double elimination</option>
+                <option value="robin">Round robin</option>
+              </select>
+            </div>
+            <div id="bracket-groups-wrap" style="display:none">
+              <label class="lbl">How many groups</label>
+              <input id="bracket-groups" type="number" min="1" step="1" value="1" oninput="previewBracket()"/>
+            </div>
+          </div>
+          <div id="bracket-plan" style="font-size:13px;color:var(--text2);margin:12px 0;line-height:1.45"></div>
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <button type="button" class="gold" id="bracket-go" onclick="makeBrackets()">Make bracket</button>
+            <button type="button" id="bracket-copy" onclick="copyBrackets()" disabled>Copy</button>
+            <button type="button" id="bracket-print" onclick="printBrackets()" disabled>Print</button>
+          </div>
+        </div>
+        <div id="bracket-result"></div>
       </div>
 
       <!-- SKILLS -->
@@ -1379,6 +1422,7 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script src="team-draw.js?v=20261119"></script>
+<script src="bracket-draw.js?v=20261119"></script>
 <script>
 var ADMIN_EMAIL = "chuynh@lasdschools.org";
 
@@ -4451,6 +4495,10 @@ async function absorbSelected() {
 // ── TEAMS ────────────────────────────────────────────────────
 var lastTeamText = "";
 var lastTeamPrint = "";
+var lastTeamEvents = [];
+var lastBrackets = [];
+var lastBracketText = "";
+var lastBracketPrint = "";
 function teamsEsc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -4823,7 +4871,341 @@ function renderTeamDraw(blocks, settings) {
   if (copyBtn) copyBtn.disabled = !lastTeamText;
   if (printBtn) printBtn.disabled = !lastTeamText;
   if (go) go.textContent = "Draw again";
+  lastTeamEvents = teamsFieldEvents(blocks, settings);
+  resetBracketUi(settings.skillMode !== "off");
 }
+function teamsFieldEvents(blocks, settings) {
+  var custom = teamsCustomNames();
+  return blocks.map(function(block, bi) {
+    var named = [];
+    var nameIndex = 0;
+    block.sections.forEach(function(section) {
+      section.teams.forEach(function(team) {
+        var people = team.slice().sort(function(a, b) {
+          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        });
+        var strength = null;
+        if (settings.skillMode !== "off" && typeof VikingTeams !== "undefined") {
+          strength = VikingTeams.assetAverage(people, settings.blank);
+        }
+        named.push({
+          id: "p" + bi + "t" + named.length,
+          name: teamsNameAt(nameIndex++, custom),
+          strength: strength,
+          members: people.map(function(p) { return p.name; })
+        });
+      });
+    });
+    var title = block.period !== "" && block.period != null ? ("Period " + block.period) : "";
+    return { title: title, teams: named, bySkill: settings.skillMode !== "off" };
+  });
+}
+function syncBracketFields() {
+  var format = (document.getElementById("bracket-format") || {}).value || "single";
+  var wrap = document.getElementById("bracket-groups-wrap");
+  if (wrap) wrap.style.display = format === "robin" ? "" : "none";
+  var go = document.getElementById("bracket-go");
+  if (go) go.textContent = format === "robin" ? "Make round robin" : "Make bracket";
+}
+function bracketOptions() {
+  var format = (document.getElementById("bracket-format") || {}).value || "single";
+  var raw = String((document.getElementById("bracket-groups") || {}).value || "").trim();
+  var groups = raw === "" ? NaN : Number(raw);
+  return { format: format, groups: groups };
+}
+function resetBracketUi(bySkill) {
+  lastBrackets = [];
+  lastBracketText = "";
+  lastBracketPrint = "";
+  var card = document.getElementById("teams-bracket-card");
+  if (card) card.classList.remove("hidden");
+  var note = document.getElementById("bracket-note");
+  if (note) {
+    note.textContent = bySkill
+      ? "Marks are on for this draw. A round robin puts similar skill averages in the same group, strongest group first. A championship bracket seeds the strongest team as 1."
+      : "Marks are off for this draw. A round robin groups teams in draw order. A championship bracket seeds the first team drawn as 1.";
+  }
+  setHTML("bracket-result", "");
+  alertEl("bracket-alert", "");
+  var copyBtn = document.getElementById("bracket-copy");
+  var printBtn = document.getElementById("bracket-print");
+  if (copyBtn) copyBtn.disabled = true;
+  if (printBtn) printBtn.disabled = true;
+  syncBracketFields();
+  previewBracket();
+}
+function previewBracket() {
+  syncBracketFields();
+  var el = document.getElementById("bracket-plan");
+  if (!el || typeof VikingBrackets === "undefined" || !lastTeamEvents.length) return;
+  var options = bracketOptions();
+  var lines = lastTeamEvents.map(function(event) {
+    var built = VikingBrackets.buildBracket(event.teams, {
+      format: options.format,
+      groups: options.format === "robin" ? options.groups : 1,
+      bySkill: event.bySkill
+    });
+    var prefix = event.title ? (event.title + ": ") : "";
+    return prefix + (built.ok ? built.note : built.error);
+  });
+  el.textContent = lines.join(" ");
+}
+function makeBrackets() {
+  if (typeof VikingBrackets === "undefined") {
+    alertEl("bracket-alert", "Bracket maker did not load. Refresh the page.");
+    return;
+  }
+  if (!lastTeamEvents.length) {
+    alertEl("bracket-alert", "Draw teams first.");
+    return;
+  }
+  var options = bracketOptions();
+  var errors = [];
+  lastBrackets = lastTeamEvents.map(function(event) {
+    var built = VikingBrackets.buildBracket(event.teams, {
+      format: options.format,
+      groups: options.format === "robin" ? options.groups : 1,
+      bySkill: event.bySkill
+    });
+    var label = event.title ? (event.title + ": ") : "";
+    if (!built.ok) errors.push(label + built.error);
+    return { title: event.title, built: built, results: {} };
+  });
+  var copyBtn = document.getElementById("bracket-copy");
+  var printBtn = document.getElementById("bracket-print");
+  if (errors.length && errors.length === lastBrackets.length) {
+    alertEl("bracket-alert", errors.join(" "));
+    setHTML("bracket-result", "");
+    lastBracketText = "";
+    lastBracketPrint = "";
+    if (copyBtn) copyBtn.disabled = true;
+    if (printBtn) printBtn.disabled = true;
+    return;
+  }
+  alertEl("bracket-alert", errors.concat(["Tap a team to mark the winner. Tap that team again to undo."]).join(" "), errors.length ? "err" : "ok");
+  renderBrackets();
+}
+function bracketSlotText(slot) {
+  if (!slot || slot.bye) return "Bye";
+  if (slot.pending) return slot.pending;
+  return (slot.seed ? (slot.seed + "  ") : "") + slot.name;
+}
+function bracketSlotHtml(eventIndex, match, slot) {
+  var won = match.status === "done" && slot.id && slot.id === match.winnerId;
+  var cls = "bracket-slot" + (won ? " win" : "");
+  var text = teamsEsc(bracketSlotText(slot));
+  if (!slot.id || match.status === "open" || match.status === "bye") return '<div class="' + cls + '">' + text + "</div>";
+  return '<button type="button" class="' + cls + '" data-event="' + eventIndex + '" data-match="' + teamsEsc(match.id) + '" data-bracket-pick="' + teamsEsc(slot.id) + '">' + text + "</button>";
+}
+function bracketMatchHtml(eventIndex, match) {
+  if (match.status === "bye" && match.winnerId) {
+    var who = match.a.id === match.winnerId ? match.a : match.b;
+    return '<div class="bracket-match"><div class="bracket-slot win">' + teamsEsc(bracketSlotText(who) + "  ·  bye") + "</div></div>";
+  }
+  return '<div class="bracket-match">' + bracketSlotHtml(eventIndex, match, match.a) + bracketSlotHtml(eventIndex, match, match.b) + "</div>";
+}
+function bracketRoundsHtml(eventIndex, rounds) {
+  if (!rounds || !rounds.length) return "";
+  return '<div class="bracket-scroll"><div class="bracket-cols">' + rounds.map(function(round) {
+    return '<div class="bracket-col"><div class="bracket-round-title">' + teamsEsc(round.title) + "</div>" +
+      round.matches.map(function(match) { return bracketMatchHtml(eventIndex, match); }).join("") + "</div>";
+  }).join("") + "</div></div>";
+}
+function bracketSeedsHtml(entrants, bySkill) {
+  return '<div class="team-grid">' + entrants.map(function(team) {
+    var bits = [];
+    if (bySkill && team.strength != null) bits.push("skill " + Number(team.strength).toFixed(1));
+    if (team.members && team.members.length) bits.push(team.members.join(", "));
+    return '<div class="card team-card"><h3>' + teamsEsc(team.seed + "  " + team.name) + "</h3>" +
+      (bits.length ? '<div class="team-meta">' + teamsEsc(bits.join(" · ")) + "</div>" : "") + "</div>";
+  }).join("") + "</div>";
+}
+function bracketRobinHtml(eventIndex, rounds) {
+  return (rounds || []).map(function(round) {
+    var byes = round.byes && round.byes.length
+      ? '<div class="team-meta">Bye: ' + teamsEsc(round.byes.map(function(team) { return team.name; }).join(", ")) + "</div>"
+      : "";
+    return '<div class="card" style="margin-top:10px"><div class="bracket-round-title">' + teamsEsc(round.title) + "</div>" +
+      round.matches.map(function(match) { return bracketMatchHtml(eventIndex, match); }).join("") + byes + "</div>";
+  }).join("");
+}
+function bracketStandingsHtml(rows, bySkill) {
+  if (!rows || !rows.length) return "";
+  return '<div class="card team-card" style="margin-top:10px"><h3>Standings</h3><div class="team-meta">Wins–losses</div>' +
+    rows.map(function(row) {
+      var skill = bySkill && row.strength != null ? (" · " + Number(row.strength).toFixed(1)) : "";
+      return '<div class="team-person"><span>' + teamsEsc(row.rank + ". " + row.name + skill) + "</span><span>" +
+        teamsEsc(row.wins + "–" + row.losses) + "</span></div>";
+    }).join("") + "</div>";
+}
+function bracketMatchLine(match) {
+  if (match.status === "bye" && match.winnerId) {
+    var who = match.a.id === match.winnerId ? match.a : match.b;
+    return bracketSlotText(who) + " — bye";
+  }
+  var left = bracketSlotText(match.a);
+  var right = bracketSlotText(match.b);
+  if (match.status === "done") {
+    var winner = match.winnerId === match.a.id ? left : right;
+    var loser = match.winnerId === match.a.id ? right : left;
+    return winner + " def. " + loser;
+  }
+  return left + " vs " + right;
+}
+function renderBrackets() {
+  var html = [];
+  var lines = [];
+  lastBrackets.forEach(function(item, eventIndex) {
+    if (item.title) {
+      html.push('<div class="team-section">' + teamsEsc(item.title) + "</div>");
+      lines.push(item.title, "");
+    }
+    if (!item.built || !item.built.ok) {
+      var err = (item.built && item.built.error) || "Could not build this bracket.";
+      html.push('<div class="team-meta">' + teamsEsc(err) + "</div>");
+      lines.push(err, "");
+      return;
+    }
+    var view = VikingBrackets.viewBracket(item.built, item.results);
+    html.push('<div class="team-meta">' + teamsEsc(view.note) + "</div>");
+    lines.push(view.note, "");
+    view.groups.forEach(function(group) {
+      if (group.name) {
+        html.push('<div class="team-section">' + teamsEsc(group.name) + "</div>");
+        lines.push(group.name, "");
+      }
+      html.push(bracketSeedsHtml(group.entrants, view.bySkill));
+      lines.push("Seeds");
+      group.entrants.forEach(function(team) {
+        var bits = [];
+        if (view.bySkill && team.strength != null) bits.push(Number(team.strength).toFixed(1));
+        if (team.members && team.members.length) bits.push(team.members.join(", "));
+        lines.push(team.seed + " " + team.name + (bits.length ? " (" + bits.join(" · ") + ")" : ""));
+      });
+      lines.push("");
+      if (view.format === "double" && group.winners.length) {
+        html.push('<div class="team-section">Winners bracket</div>');
+        lines.push("Winners bracket", "");
+      }
+      html.push(bracketRoundsHtml(eventIndex, group.winners));
+      group.winners.forEach(function(round) {
+        lines.push(round.title);
+        round.matches.forEach(function(match) { lines.push(bracketMatchLine(match)); });
+        lines.push("");
+      });
+      if (group.losers.length) {
+        html.push('<div class="team-section">Losers bracket</div>');
+        lines.push("Losers bracket", "");
+        html.push(bracketRoundsHtml(eventIndex, group.losers));
+        group.losers.forEach(function(round) {
+          lines.push(round.title);
+          round.matches.forEach(function(match) { lines.push(bracketMatchLine(match)); });
+          lines.push("");
+        });
+      }
+      if (group.championship.length) {
+        html.push('<div class="team-section">Championship</div>');
+        lines.push("Championship");
+        html.push('<div class="bracket-col" style="max-width:280px">' + group.championship.map(function(match) {
+          return '<div class="bracket-round-title">' + teamsEsc(match.label) + "</div>" + bracketMatchHtml(eventIndex, match);
+        }).join("") + "</div>");
+        group.championship.forEach(function(match) { lines.push(bracketMatchLine(match)); });
+        lines.push("");
+      }
+      if (group.robin.length) {
+        html.push(bracketRobinHtml(eventIndex, group.robin));
+        group.robin.forEach(function(round) {
+          lines.push(round.title);
+          round.matches.forEach(function(match) { lines.push(bracketMatchLine(match)); });
+          if (round.byes && round.byes.length) lines.push("Bye: " + round.byes.map(function(team) { return team.name; }).join(", "));
+          lines.push("");
+        });
+        html.push(bracketStandingsHtml(group.standings, view.bySkill));
+        if (group.standings.length) {
+          lines.push("Standings");
+          group.standings.forEach(function(row) {
+            lines.push(row.rank + ". " + row.name + " " + row.wins + "-" + row.losses);
+          });
+          lines.push("");
+        }
+        if (group.leaders.length) {
+          var leaderNames = group.leaders.map(function(row) { return row.name; }).join(", ");
+          var leaderLabel = group.leaders.length === 1 ? "Leading: " : "Tied for first: ";
+          html.push('<div class="bracket-champ">' + teamsEsc(leaderLabel + leaderNames) + "</div>");
+          lines.push(leaderLabel + leaderNames, "");
+        }
+      }
+    });
+    if (view.championName) {
+      html.push('<div class="bracket-champ">Champion: ' + teamsEsc(view.championName) + "</div>");
+      lines.push("Champion: " + view.championName, "");
+    }
+  });
+  setHTML("bracket-result", html.join(""));
+  lastBracketText = lines.join("\n").trim();
+  lastBracketPrint = html.join("");
+  var copyBtn = document.getElementById("bracket-copy");
+  var printBtn = document.getElementById("bracket-print");
+  var ready = !!lastBracketText;
+  if (copyBtn) copyBtn.disabled = !ready;
+  if (printBtn) printBtn.disabled = !ready;
+}
+function onBracketClick(e) {
+  var btn = e.target && e.target.closest ? e.target.closest("[data-bracket-pick]") : null;
+  if (!btn) return;
+  var eventIndex = Number(btn.getAttribute("data-event"));
+  var matchId = btn.getAttribute("data-match");
+  var teamId = btn.getAttribute("data-bracket-pick");
+  var item = lastBrackets[eventIndex];
+  if (!item || !item.built || !item.built.ok || !matchId || !teamId) return;
+  if (item.results[matchId] === teamId) delete item.results[matchId];
+  else item.results[matchId] = teamId;
+  renderBrackets();
+}
+function copyBrackets() {
+  if (!lastBracketText) return;
+  function done() { alertEl("bracket-alert", "Copied the bracket.", "ok"); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(lastBracketText).then(done).catch(function() { bracketCopyFallback(); });
+    return;
+  }
+  bracketCopyFallback();
+}
+function bracketCopyFallback() {
+  var area = document.createElement("textarea");
+  area.value = lastBracketText;
+  document.body.appendChild(area);
+  area.select();
+  try {
+    document.execCommand("copy");
+    alertEl("bracket-alert", "Copied the bracket.", "ok");
+  } catch (err) {
+    alertEl("bracket-alert", "Could not copy. Select the bracket and copy it yourself.");
+  }
+  document.body.removeChild(area);
+}
+function printBrackets() {
+  if (!lastBracketPrint) return;
+  var w = window.open("", "viking-brackets");
+  if (!w) { alertEl("bracket-alert", "Allow pop-up windows to print the bracket."); return; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>VikingStrong bracket</title><style>'
+    + "body{font-family:Georgia,serif;color:#1a1e38;margin:24px}h1{font-size:22px;margin:0 0 12px}"
+    + ".team-section{font-size:18px;margin:16px 0 8px}.team-meta{color:#555;font-size:12px;margin:0 0 8px}"
+    + ".team-grid{display:flex;flex-wrap:wrap;gap:8px}.team-card{border:1px solid #ccc;border-radius:8px;padding:8px 10px;width:220px;break-inside:avoid}"
+    + ".team-card h3{margin:0 0 4px;font-size:16px}.team-person{display:flex;justify-content:space-between;gap:8px;font-family:sans-serif;font-size:13px;padding:3px 0;border-top:1px solid #eee}"
+    + ".bracket-cols{display:flex;gap:16px;align-items:flex-start}.bracket-col{min-width:190px}"
+    + ".bracket-round-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin:8px 0 4px}"
+    + ".bracket-match{border:1px solid #ccc;border-radius:8px;margin:0 0 10px;page-break-inside:avoid}"
+    + ".bracket-slot,button.bracket-slot{display:block;width:100%;text-align:left;background:#fff;color:#1a1e38;border:0;border-top:1px solid #eee;padding:6px 8px;font:13px sans-serif}"
+    + ".bracket-slot.win{background:#f6efd4;font-weight:700}.bracket-champ{font-size:18px;font-weight:700;margin:12px 0}"
+    + "</style></head><body><h1>VikingStrong bracket</h1>" + lastBracketPrint + "</body></html>");
+  w.document.close();
+  w.focus();
+  setTimeout(function() { try { w.print(); } catch (e) {} }, 250);
+}
+var bracketResultEl = document.getElementById("bracket-result");
+if (bracketResultEl) bracketResultEl.addEventListener("click", onBracketClick);
 function makeTeams() {
   if (typeof VikingTeams === "undefined") {
     alertEl("teams-alert", "Team maker did not load. Refresh the page.");
