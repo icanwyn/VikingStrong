@@ -429,11 +429,17 @@ function enqueueStudentMark(student, change) {
       var nowCat = currentCatalog();
       if ((nowCat.v || 0) >= remoteV) live.catalog = cloneJson(nowCat);
       goals.__vs = live;
-      return sb.from("students").update({ goals: goals }).eq("id", sid).then(function(ur) {
+      var write = sb.from("students").update({ goals: goals }).eq("id", sid);
+      var pending = write.select ? write.select("id, goals") : write;
+      return pending.then(function(ur) {
         if (ur.error) throw ur.error;
-        if (typeof applyStudentPatch === "function") applyStudentPatch(sid, { goals: goals });
-        if (typeof studentGoals !== "undefined" && studentGoals[sid]) studentGoals[sid] = goals;
-        if (typeof alertEl === "function") alertEl("marks-alert", "");
+        if (ur.data && !ur.data.length) throw new Error("That mark did not save. Refresh the page and try again.");
+        var savedGoals = (ur.data && ur.data[0] && ur.data[0].goals) || goals;
+        if (typeof savedGoals === "string") { try { savedGoals = JSON.parse(savedGoals); } catch (e) { savedGoals = goals; } }
+        if (goals.__vs && !(savedGoals && savedGoals.__vs)) throw new Error("That mark did not stay saved. Refresh the page and try again.");
+        if (typeof applyStudentPatch === "function") applyStudentPatch(sid, { goals: savedGoals });
+        if (typeof studentGoals !== "undefined" && studentGoals[sid]) studentGoals[sid] = savedGoals;
+        if (typeof alertEl === "function") alertEl("marks-alert", "Saved.", "ok");
       });
     });
   }).catch(function(err) {
@@ -610,7 +616,8 @@ function renderMarkSummary(people, unit) {
   if (!unit) { el.textContent = people.length + (people.length === 1 ? " student" : " students"); return; }
   var day = markToday();
   var tool = currentTool();
-  var loan = 0, tardy = 0, skilled = 0;
+  var loan = 0, tardy = 0, skilled = 0, unitLoan = 0, unitTardy = 0;
+  var custom = {};
   people.forEach(function(s) {
     var slot = unitSlot(readVs(s), unit.id, false);
     if (!slot) return;
@@ -618,9 +625,20 @@ function renderMarkSummary(people, unit) {
     var rec = (slot.days && slot.days[day]) || {};
     if (rec.loaner) loan++;
     if (rec.tardy) tardy++;
+    Object.keys(slot.days || {}).forEach(function(d) {
+      var one = slot.days[d] || {};
+      if (one.loaner) unitLoan++;
+      if (one.tardy) unitTardy++;
+      if (!one.x) return;
+      currentCatalog().kinds.forEach(function(k) { if (one.x[k.id]) custom[k.name] = (custom[k.name] || 0) + 1; });
+    });
   });
   var skillLabel = tool && tool.mode === "level" ? tool.label : "Skill";
-  el.textContent = people.length + " students · " + skillLabel + " set for " + skilled + " · " + loan + " loaners today · " + tardy + " tardies today";
+  var extras = Object.keys(custom).sort().map(function(name) { return custom[name] + " " + name; });
+  el.textContent = people.length + " students · " + skillLabel + " set for " + skilled +
+    " · " + loan + " loaners today · " + tardy + " tardies today" +
+    " · This unit: " + unitTardy + " tardies, " + unitLoan + " loaners" +
+    (extras.length ? ", " + extras.join(", ") : "");
 }
 function renderAlpha(list) {
   var el = document.getElementById("marks-alpha");
@@ -1085,6 +1103,7 @@ function onMarksClick(e) {
   if (act === "open") openMarks(el.getAttribute("data-period"));
   else if (act === "back") closeMarkBoard();
   else if (act === "today") { var d = document.getElementById("marks-date"); if (d) d.value = isoToday(); renderMarkPads(); }
+  else if (act === "report") { if (typeof goTab === "function") goTab("report"); }
   else if (act === "add-unit") addUnitFromInput();
   else if (act === "rename-unit") renameUnitFromInput();
   else if (act === "delete-unit") deleteSelectedUnit();
@@ -1118,6 +1137,167 @@ function onMarksClick(e) {
   else if (act === "clear") clearCurrentMark();
   else if (act === "unfocus") { markFocus = ""; renderMarkPads(); }
 }
+function levelName(id) {
+  var key = String(id || "");
+  for (var i = 0; i < MARK_LEVELS.length; i++) if (MARK_LEVELS[i].id === key) return MARK_LEVELS[i].name;
+  return key;
+}
+function reportDayOn(dayKey, when, day) {
+  return when !== "day" || dayKey === day;
+}
+function studentMarkFacts(student, unit, when, day) {
+  var slot = unit ? unitSlot(readVs(student), unit.id, false) : null;
+  var skills = {};
+  unitSkills(unit).forEach(function(sk) {
+    skills[sk.id] = slot && slot.skills && slot.skills[sk.id] ? String(slot.skills[sk.id]) : "";
+  });
+  var legacy = !unitSkills(unit).length && slot && slot.skill ? String(slot.skill) : "";
+  var loaner = 0, tardy = 0, custom = {}, behavior = {};
+  if (slot) {
+    Object.keys(slot.days || {}).forEach(function(d) {
+      if (!reportDayOn(d, when, day)) return;
+      var rec = slot.days[d] || {};
+      if (rec.loaner) loaner++;
+      if (rec.tardy) tardy++;
+      if (rec.behavior) behavior[rec.behavior] = (behavior[rec.behavior] || 0) + 1;
+      if (!rec.x) return;
+      Object.keys(rec.x).forEach(function(id) { if (rec.x[id]) custom[id] = (custom[id] || 0) + 1; });
+    });
+  }
+  return { skills: skills, legacy: legacy, loaner: loaner, tardy: tardy, custom: custom, behavior: behavior };
+}
+function behaviorSummary(counts) {
+  var parts = [];
+  MARK_BEHAVIORS.forEach(function(b) { if (counts[b.id]) parts.push(counts[b.id] + " " + b.name); });
+  Object.keys(counts).forEach(function(id) {
+    var known = false;
+    MARK_BEHAVIORS.forEach(function(b) { if (b.id === id) known = true; });
+    if (!known && counts[id]) parts.push(counts[id] + " " + id);
+  });
+  return parts.join(", ");
+}
+function buildMarkReport(people, unit, when, day) {
+  var kinds = currentCatalog().kinds || [];
+  var skills = unitSkills(unit);
+  var rows = (people || []).map(function(s) {
+    return { student: s, facts: studentMarkFacts(s, unit, when, day) };
+  });
+  var summary = { skills: {}, legacy: 0, loaner: 0, tardy: 0, custom: {}, behavior: {}, rated: 0 };
+  skills.forEach(function(sk) { summary.skills[sk.id] = { "1": 0, "2": 0, "3": 0, "4": 0, set: 0 }; });
+  rows.forEach(function(row) {
+    var facts = row.facts;
+    var any = false;
+    skills.forEach(function(sk) {
+      var v = facts.skills[sk.id];
+      if (v !== "1" && v !== "2" && v !== "3" && v !== "4") return;
+      summary.skills[sk.id][v]++;
+      summary.skills[sk.id].set++;
+      any = true;
+    });
+    if (facts.legacy) { summary.legacy++; any = true; }
+    summary.loaner += facts.loaner;
+    summary.tardy += facts.tardy;
+    if (facts.loaner || facts.tardy) any = true;
+    Object.keys(facts.custom).forEach(function(id) {
+      summary.custom[id] = (summary.custom[id] || 0) + facts.custom[id];
+      any = true;
+    });
+    Object.keys(facts.behavior).forEach(function(id) {
+      summary.behavior[id] = (summary.behavior[id] || 0) + facts.behavior[id];
+      any = true;
+    });
+    if (any) summary.rated++;
+  });
+  return { rows: rows, summary: summary, skills: skills, kinds: kinds };
+}
+function reportSelect(el, options, preferred) {
+  if (!el) return "";
+  var keep = el.dataset.picked ? el.value : (preferred || el.value);
+  el.dataset.picked = "1";
+  el.innerHTML = options.map(function(opt) {
+    return '<option value="' + escHtml(opt.value) + '">' + escHtml(opt.label) + "</option>";
+  }).join("");
+  var found = false;
+  for (var i = 0; i < options.length; i++) if (options[i].value === keep) found = true;
+  el.value = found ? keep : (options[0] ? options[0].value : "");
+  return el.value;
+}
+function renderMarkReport() {
+  var summaryEl = document.getElementById("marks-report-summary");
+  var tableEl = document.getElementById("marks-report-table");
+  if (!summaryEl || !tableEl) return;
+  scanCatalog();
+  var cat = currentCatalog();
+  var period = reportSelect(document.getElementById("marks-report-period"), [{ value: "all", label: "All periods" }].concat(markPeriods().map(function(p) {
+    return { value: p, label: "Period " + p };
+  })), markPeriod);
+  var unit = null;
+  var unitId = reportSelect(document.getElementById("marks-report-unit"), cat.units.map(function(u) {
+    return { value: u.id, label: u.name };
+  }), markUnitId);
+  for (var i = 0; i < cat.units.length; i++) if (cat.units[i].id === unitId) unit = cat.units[i];
+  var whenEl = document.getElementById("marks-report-when");
+  var when = whenEl && whenEl.value === "day" ? "day" : "unit";
+  var dateEl = document.getElementById("marks-report-date");
+  if (dateEl && !dateEl.value) dateEl.value = isoToday();
+  var day = dateEl && dateEl.value ? dateEl.value : isoToday();
+  var query = String((document.getElementById("marks-report-search") || {}).value || "").trim().toLowerCase();
+  if (!unit) {
+    summaryEl.innerHTML = "";
+    tableEl.innerHTML = '<div class="mark-intro">Add a sport on the Marks tab, then rate students. This report counts those saved marks.</div>';
+    return;
+  }
+  var people = (typeof allStudents === "function" ? allStudents() : []).filter(function(s) {
+    if (period !== "all" && String(s.period) !== String(period)) return false;
+    if (!query) return true;
+    var blob = (markFirstName(s) + " " + (s.last || "") + " " + (s.nickname || "")).toLowerCase();
+    return blob.indexOf(query) !== -1;
+  });
+  people.sort(compareByFirstName);
+  var report = buildMarkReport(people, unit, when, day);
+  var cards = [];
+  report.skills.forEach(function(sk) {
+    var bag = report.summary.skills[sk.id];
+    cards.push('<div class="mark-stat"><div class="n">' + bag.set + '</div><div class="l">' + escHtml(sk.name) + " rated</div><div class=\"l\">" +
+      bag["1"] + " Beginning · " + bag["2"] + " Developing · " + bag["3"] + " Proficient · " + bag["4"] + " Advanced</div></div>");
+  });
+  if (!report.skills.length) {
+    cards.push('<div class="mark-stat"><div class="n">' + report.summary.legacy + '</div><div class="l">Skill level set</div></div>');
+  }
+  cards.push('<div class="mark-stat"><div class="n">' + report.summary.tardy + '</div><div class="l">Tardies</div></div>');
+  cards.push('<div class="mark-stat"><div class="n">' + report.summary.loaner + '</div><div class="l">Loaner clothes</div></div>');
+  report.kinds.forEach(function(k) {
+    cards.push('<div class="mark-stat"><div class="n">' + (report.summary.custom[k.id] || 0) + '</div><div class="l">' + escHtml(k.name) + "</div></div>");
+  });
+  MARK_BEHAVIORS.forEach(function(b) {
+    if (!report.summary.behavior[b.id]) return;
+    cards.push('<div class="mark-stat"><div class="n">' + report.summary.behavior[b.id] + '</div><div class="l">' + escHtml(b.name) + "</div></div>");
+  });
+  summaryEl.innerHTML = cards.join("");
+  var head = "<th>Student</th><th>Period</th>";
+  report.skills.forEach(function(sk) { head += "<th>" + escHtml(sk.name) + "</th>"; });
+  if (!report.skills.length) head += "<th>Skill level</th>";
+  head += "<th>Tardies</th><th>Loaner</th>";
+  report.kinds.forEach(function(k) { head += "<th>" + escHtml(k.name) + "</th>"; });
+  head += "<th>Behavior</th>";
+  var body = report.rows.map(function(row) {
+    var s = row.student;
+    var facts = row.facts;
+    var cells = "<td>" + escHtml((markBigName(s) + " " + String(s.last || "")).trim()) + "</td><td>" + escHtml(String(s.period == null ? "" : s.period)) + "</td>";
+    report.skills.forEach(function(sk) {
+      var v = facts.skills[sk.id];
+      cells += "<td>" + (v ? escHtml(v + " " + levelName(v)) : "—") + "</td>";
+    });
+    if (!report.skills.length) cells += "<td>" + (facts.legacy ? escHtml(facts.legacy + " " + levelName(facts.legacy)) : "—") + "</td>";
+    cells += "<td>" + facts.tardy + "</td><td>" + facts.loaner + "</td>";
+    report.kinds.forEach(function(k) { cells += "<td>" + (facts.custom[k.id] || 0) + "</td>"; });
+    cells += "<td>" + escHtml(behaviorSummary(facts.behavior) || "—") + "</td>";
+    return "<tr>" + cells + "</tr>";
+  }).join("");
+  tableEl.innerHTML = people.length
+    ? "<table><thead><tr>" + head + "</tr></thead><tbody>" + body + "</tbody></table>"
+    : '<div class="mark-intro">No students match that period or search.</div>';
+}
 function onMarksChange(e) {
   var t = e.target;
   if (!t) return;
@@ -1145,6 +1325,16 @@ function bindMarksUI() {
         else addKindFromInput();
       });
     });
+  }
+  var report = document.getElementById("pane-report");
+  if (report && !report.dataset.bound) {
+    report.dataset.bound = "1";
+    ["marks-report-period", "marks-report-unit", "marks-report-when", "marks-report-date"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener("change", function() { renderMarkReport(); });
+    });
+    var reportSearch = document.getElementById("marks-report-search");
+    if (reportSearch) reportSearch.addEventListener("input", function() { renderMarkReport(); });
   }
   var launch = document.getElementById("roster-launch");
   if (launch && !launch.dataset.bound) {
