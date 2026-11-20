@@ -574,14 +574,27 @@ button.mark-letter{min-width:34px;padding:6px 0;font-weight:700;color:var(--gold
 .mark-alpha{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 12px}
 .mark-hint{font-size:13px;color:var(--text-dark2);margin-bottom:4px}
 .mark-summary{font-size:12px;color:var(--text-dark2);margin-bottom:8px}
+#pane-report{color:#1A1E38}
+#pane-report .mark-hint{color:#1A1E38;font-weight:600}
+#pane-report input,#pane-report select{
+  color:#1A1E38;background:#fff;border:1.5px solid #1A1E38;-webkit-text-fill-color:#1A1E38
+}
+#pane-report select option{background:#fff;color:#1A1E38}
 .mark-report-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:8px;margin:12px 0}
-.mark-stat{background:#fff;border:1px solid rgba(30,35,64,.1);border-radius:12px;padding:10px 12px;color:var(--text-dark)}
-.mark-stat .n{font-size:22px;font-weight:700;line-height:1.1}
-.mark-stat .l{font-size:12px;color:var(--text-dark2);margin-top:2px}
-.mark-report-table{overflow-x:auto;background:#fff;border:1px solid rgba(30,35,64,.1);border-radius:12px}
-.mark-report-table table{width:100%;border-collapse:collapse;font-size:13px;color:var(--text-dark)}
-.mark-report-table th,.mark-report-table td{padding:8px 10px;border-bottom:1px solid rgba(30,35,64,.08);text-align:left;white-space:nowrap}
-.mark-report-table th{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-dark2)}
+.mark-stat{background:#fff;border:1.5px solid #1A1E38;border-radius:12px;padding:10px 12px;color:#1A1E38}
+.mark-stat .n{font-size:26px;font-weight:700;line-height:1.1;color:#1A1E38}
+.mark-stat .l{font-size:13px;color:#1A1E38;font-weight:600;margin-top:2px}
+.mark-report-table{overflow-x:auto;background:#fff;border:1.5px solid #1A1E38;border-radius:12px}
+.mark-report-table table{width:100%;border-collapse:collapse;font-size:14px;color:#1A1E38}
+#pane-report .mark-report-table th,#pane-report .mark-report-table td{
+  padding:8px 10px;border-bottom:1px solid rgba(26,30,56,.18);text-align:left;white-space:nowrap;color:#1A1E38
+}
+#pane-report .mark-report-table th{
+  font-size:12px;letter-spacing:.04em;text-transform:uppercase;font-weight:700;
+  background:#1A1E38;color:#F7F4EE;border-bottom-color:#1A1E38
+}
+#pane-report .mark-report-table tbody tr:nth-child(even) td{background:#F6F3EC}
+#pane-report .mark-report-table tr:hover td{background:#F3E6C0;color:#1A1E38}
 button.mark-pad{
   width:100%;aspect-ratio:1;min-height:132px;border:none;border-radius:18px;padding:12px;
   display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;
