@@ -553,7 +553,8 @@ button.mark-period .big{font-family:'Playfair Display',Georgia,serif;font-size:3
 button.mark-period .sub{font-size:13px;color:var(--text-dark2)}
 button.mark-period:hover .sub{color:rgba(240,237,232,.7)}
 .mark-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
-.mark-toolbar input{width:auto;min-width:0;flex:1 1 160px}
+.mark-toolbar input,.mark-toolbar select{width:auto;min-width:0;flex:1 1 160px}
+.mark-toolbar select{min-width:12rem;max-width:18rem;color:#1A1E38;background:#fff;border:1.5px solid #1A1E38;-webkit-text-fill-color:#1A1E38}
 .mark-toolbar button,.mark-letter,.mark-tool,.mark-unit-btn{width:auto}
 .mark-legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12px;color:var(--text-dark2);margin-bottom:10px}
 .mark-legend i{display:inline-block;width:14px;height:14px;border-radius:4px;margin-right:6px;vertical-align:-2px}
@@ -775,11 +776,9 @@ button.mark-pad.focus{box-shadow:0 0 0 3px #1A1E38,0 10px 22px rgba(30,35,64,.22
           </div>
           <div class="mark-legend"><span><i class="boy"></i>Boys</span><span><i class="girl"></i>Girls</span><span>Sorted A–Z by first name</span></div>
           <div class="mark-toolbar">
-            <span style="font-size:12px;color:var(--text2)">Sports</span>
-            <div id="marks-sports" class="mark-chiprow"></div>
-          </div>
-          <div class="mark-toolbar">
-            <div id="marks-units" class="mark-chiprow"></div>
+            <label class="mark-hint" style="margin:0">Sport
+              <select id="marks-sports" aria-label="Sport to mark"></select>
+            </label>
             <input id="marks-unit-name" placeholder="Or type a unit, e.g. Kickball" aria-label="Unit name"/>
             <button type="button" data-act="add-unit">Add unit</button>
             <button type="button" data-act="rename-unit">Rename</button>
@@ -4318,6 +4317,6 @@ function goAdminTab(t) {
 </script>
 <script src="scores-page.js?v=20261119"></script>
 <script src="teams-page.js?v=20261119b"></script>
-<script src="marks.js?v=4"></script>
+<script src="marks.js?v=5"></script>
 </body>
 </html>
