@@ -526,28 +526,32 @@ function backfillSportSkills() {
 function renderSportPicker(unit) {
   var box = document.getElementById("marks-sports");
   if (!box) return;
-  var names = {};
-  currentCatalog().units.forEach(function(u) { names[u.name.toLowerCase()] = true; });
-  box.innerHTML = MARK_SPORTS.map(function(sp) {
-    var selected = unit && unit.name.toLowerCase() === sp.name.toLowerCase();
-    var added = !!names[sp.name.toLowerCase()];
-    return '<button type="button" class="mark-unit-btn' + (selected ? " on" : "") + '" data-act="sport" data-sport="' + escHtml(sp.name) + '">' + escHtml(sp.name + (added && !selected ? " ✓" : "")) + "</button>";
+  var cat = currentCatalog();
+  var have = {};
+  var current = "";
+  var yours = cat.units.map(function(u) {
+    have[u.name.toLowerCase()] = true;
+    if (unit && u.id === unit.id) current = "unit:" + u.id;
+    return '<option value="unit:' + escHtml(u.id) + '">' + escHtml(u.name) + "</option>";
   }).join("");
+  var extra = MARK_SPORTS.filter(function(sp) {
+    return !have[sp.name.toLowerCase()];
+  }).map(function(sp) {
+    return '<option value="sport:' + escHtml(sp.name) + '">Add ' + escHtml(sp.name) + "</option>";
+  }).join("");
+  var html = yours ? "" : '<option value="">Choose a sport</option>';
+  if (yours) html += '<optgroup label="Your sports">' + yours + "</optgroup>";
+  if (extra) html += '<optgroup label="Add a sport">' + extra + "</optgroup>";
+  box.innerHTML = html;
+  if (current) box.value = current;
 }
 function renderMarkChrome() {
   backfillSportSkills();
   var label = document.getElementById("marks-period-label");
   if (label) label.textContent = "Period " + markPeriod;
-  var unitBox = document.getElementById("marks-units");
   var kindBox = document.getElementById("marks-kinds");
   var unit = ensureSelectedUnit();
-  var cat = currentCatalog();
   renderSportPicker(unit);
-  if (unitBox) {
-    unitBox.innerHTML = cat.units.map(function(u) {
-      return '<button type="button" class="mark-unit-btn' + (unit && u.id === unit.id ? " on" : "") + '" data-act="unit" data-id="' + escHtml(u.id) + '">' + escHtml(u.name) + "</button>";
-    }).join("") || '<span class="mark-hint">No unit yet. Pick a sport above.</span>';
-  }
   if (kindBox) {
     var active = currentTool();
     kindBox.innerHTML = markTools().map(function(tool) {
@@ -1298,9 +1302,23 @@ function renderMarkReport() {
     ? "<table><thead><tr>" + head + "</tr></thead><tbody>" + body + "</tbody></table>"
     : '<div class="mark-intro">No students match that period or search.</div>';
 }
+function chooseSport(value) {
+  var v = String(value || "");
+  if (v.indexOf("unit:") === 0) {
+    markUnitId = v.slice(5);
+    markFocus = "";
+    currentTool();
+    rememberSession();
+    renderMarkChrome();
+    renderMarkPads();
+    return;
+  }
+  if (v.indexOf("sport:") === 0) addSportUnit(v.slice(6));
+}
 function onMarksChange(e) {
   var t = e.target;
   if (!t) return;
+  if (t.id === "marks-sports") chooseSport(t.value);
   if (t.id === "marks-unit-note") saveUnitNote(t.value);
   if (t.id === "marks-behavior-note") saveBehaviorNote(t.value);
 }
